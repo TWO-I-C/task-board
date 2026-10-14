@@ -15,11 +15,19 @@ function App() {
       return
     }
 
-    const task = { id: crypto.randomUUID(), title }
+    const task = { id: crypto.randomUUID(), title, completed: false }
     setTasks((previousTasks) => [...previousTasks, task])
     setDraft('')
     setError('')
   }
+
+  function toggleTask(taskId) {
+    setTasks((previousTasks) => previousTasks.map((task) => (
+      task.id === taskId ? { ...task, completed: !task.completed } : task
+    )))
+  }
+
+  const completedCount = tasks.filter((task) => task.completed).length
 
   return (
     <main className="task-board">
@@ -51,7 +59,9 @@ function App() {
       <section aria-labelledby="task-list-title" className="tasks-section">
         <div className="list-heading">
           <h2 id="task-list-title">我的任务</h2>
-          <span className="task-count" role="status">共 {tasks.length} 项</span>
+          <span className="task-count" role="status">
+            共 {tasks.length} 项 · 已完成 {completedCount} 项
+          </span>
         </div>
         {tasks.length === 0 ? (
           <div className="empty-state">
@@ -60,10 +70,20 @@ function App() {
           </div>
         ) : (
           <ul className="task-list">
-            {tasks.map((task, index) => (
+            {tasks.map((task) => (
               <li key={task.id}>
-                <span className="task-number" aria-hidden="true">{index + 1}</span>
-                <span>{task.title}</span>
+                <label className={`task-item${task.completed ? ' is-complete' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(task.completed)}
+                    onChange={() => toggleTask(task.id)}
+                    aria-label={task.completed
+                      ? `将“${task.title}”恢复为未完成`
+                      : `将“${task.title}”标记为完成`}
+                  />
+                  <span className="task-title">{task.title}</span>
+                  <span className="task-state">{task.completed ? '已完成' : '待完成'}</span>
+                </label>
               </li>
             ))}
           </ul>

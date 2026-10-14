@@ -1,10 +1,54 @@
 import { useState } from 'react'
 import './App.css'
 
+const STORAGE_KEY = 'task-board.tasks.v1'
+
+function loadTaskBoard() {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY)
+    const tasks = saved === null ? [] : JSON.parse(saved)
+    const validTasks = Array.isArray(tasks) && tasks.every((task) => (
+      task !== null && typeof task === 'object'
+      && typeof task.id === 'string' && task.id.trim() !== ''
+      && typeof task.title === 'string' && task.title.trim() !== ''
+      && typeof task.completed === 'boolean'
+    ))
+
+    if (!validTasks || new Set(tasks.map((task) => task.id)).size !== tasks.length) {
+      throw new Error('Invalid saved tasks')
+    }
+
+    return { tasks, storageReady: true, storageError: '' }
+  } catch {
+    return {
+      tasks: [],
+      storageReady: false,
+      storageError: '无法读取本地任务，已暂停保存，原有记录未被覆盖。当前改动仅在本页有效，刷新后会丢失。',
+    }
+  }
+}
+
 function App() {
   const [draft, setDraft] = useState('')
-  const [tasks, setTasks] = useState([])
+  const [board, setBoard] = useState(loadTaskBoard)
   const [error, setError] = useState('')
+  const { tasks, storageReady, storageError } = board
+
+  function updateTasks(nextTasks) {
+    let nextStorageError = storageError
+
+    // 读取失败时保留原记录，避免用空列表或新任务覆盖它。
+    if (storageReady) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTasks))
+        nextStorageError = ''
+      } catch {
+        nextStorageError = '保存失败，本次改动只保留在当前页面。刷新或关闭页面可能丢失改动，请检查浏览器是否允许保存网站数据或存储空间是否已满。'
+      }
+    }
+
+    setBoard({ tasks: nextTasks, storageReady, storageError: nextStorageError })
+  }
 
   function addTask(event) {
     event.preventDefault()
@@ -16,13 +60,13 @@ function App() {
     }
 
     const task = { id: crypto.randomUUID(), title, completed: false }
-    setTasks((previousTasks) => [...previousTasks, task])
+    updateTasks([...tasks, task])
     setDraft('')
     setError('')
   }
 
   function toggleTask(taskId) {
-    setTasks((previousTasks) => previousTasks.map((task) => (
+    updateTasks(tasks.map((task) => (
       task.id === taskId ? { ...task, completed: !task.completed } : task
     )))
   }
@@ -32,7 +76,7 @@ function App() {
 
     if (!confirmed) return
 
-    setTasks((previousTasks) => previousTasks.filter((item) => item.id !== task.id))
+    updateTasks(tasks.filter((item) => item.id !== task.id))
   }
 
   const completedCount = tasks.filter((task) => task.completed).length
@@ -105,7 +149,12 @@ function App() {
           </ul>
         )}
       </section>
-      <p className="storage-note">任务暂存在当前页面，刷新后会清空。</p>
+      <p
+        className={`storage-note${storageError ? ' storage-error' : ''}`}
+        role={storageError ? 'alert' : 'status'}
+      >
+        {storageError || '任务会自动保存在当前浏览器，刷新后仍会保留。清除网站数据会删除这些任务。'}
+      </p>
     </main>
   )
 }

@@ -2,6 +2,11 @@ import { useState } from 'react'
 import './App.css'
 
 const STORAGE_KEY = 'task-board.tasks.v1'
+const TASK_FILTERS = [
+  { value: 'all', label: '全部' },
+  { value: 'active', label: '未完成' },
+  { value: 'completed', label: '已完成' },
+]
 
 function loadTaskBoard() {
   try {
@@ -32,6 +37,7 @@ function App() {
   const [draft, setDraft] = useState('')
   const [board, setBoard] = useState(loadTaskBoard)
   const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all')
   const { tasks, storageReady, storageError } = board
 
   function updateTasks(nextTasks) {
@@ -80,6 +86,11 @@ function App() {
   }
 
   const completedCount = tasks.filter((task) => task.completed).length
+  const visibleTasks = tasks.filter((task) => {
+    if (filter === 'active') return !task.completed
+    if (filter === 'completed') return task.completed
+    return true
+  })
 
   return (
     <main className="task-board">
@@ -115,14 +126,32 @@ function App() {
             共 {tasks.length} 项 · 已完成 {completedCount} 项
           </span>
         </div>
+        <div className="task-filters" role="group" aria-label="按完成状态筛选任务">
+          {TASK_FILTERS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className="filter-button"
+              aria-pressed={filter === option.value}
+              onClick={() => setFilter(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         {tasks.length === 0 ? (
           <div className="empty-state">
             <p>还没有任务</p>
             <p>在上方输入一件想完成的事。</p>
           </div>
+        ) : visibleTasks.length === 0 ? (
+          <div className="empty-state" role="status">
+            <p>{filter === 'active' ? '没有未完成任务' : '还没有已完成任务'}</p>
+            <p>切换筛选可查看其他任务。</p>
+          </div>
         ) : (
           <ul className="task-list">
-            {tasks.map((task) => (
+            {visibleTasks.map((task) => (
               <li key={task.id}>
                 <label className={`task-item${task.completed ? ' is-complete' : ''}`}>
                   <input

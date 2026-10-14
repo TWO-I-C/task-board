@@ -35,6 +35,10 @@ input:focus-visible, button:focus-visible { outline: 3px solid #648c78; outline-
 .list-heading { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #e8ece8; }
 h2 { margin: 0; font-size: 18px; }
 .task-count { color: #5d6962; font-size: 14px; }
+.task-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 24px; border-bottom: 1px solid #e8ece8; }
+.filter-button { min-height: 44px; padding: 8px 14px; border: 1px solid #d9e0da; border-radius: 8px; background: #f5f7f3; color: #365f51; cursor: pointer; }
+.filter-button:hover { background: #e8eee8; }
+.filter-button[aria-pressed="true"] { border-color: #285843; background: #285843; color: white; }
 .empty-state { padding: 50px 24px; text-align: center; }
 .empty-state p:first-child { font-weight: 600; }
 .empty-state p + p { margin-top: 8px; color: #68766e; font-size: 14px; }
@@ -54,5 +58,5 @@ h2 { margin: 0; font-size: 18px; }
 @media (max-width: 520px) {
   .task-board { margin: 36px auto; }
   .input-row { flex-direction: column; }
-  .list-heading, .task-list li { padding-left: 18px; padding-right: 18px; }
+  .list-heading, .task-filters, .task-list li { padding-left: 18px; padding-right: 18px; }
 }

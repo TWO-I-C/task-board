@@ -27,6 +27,14 @@ function App() {
     )))
   }
 
+  function deleteTask(task) {
+    const confirmed = window.confirm(`确定删除任务“${task.title}”吗？`)
+
+    if (!confirmed) return
+
+    setTasks((previousTasks) => previousTasks.filter((item) => item.id !== task.id))
+  }
+
   const completedCount = tasks.filter((task) => task.completed).length
 
   return (
@@ -84,6 +92,14 @@ function App() {
                   <span className="task-title">{task.title}</span>
                   <span className="task-state">{task.completed ? '已完成' : '待完成'}</span>
                 </label>
+                <button
+                  type="button"
+                  className="delete-button"
+                  onClick={() => deleteTask(task)}
+                  aria-label={`删除任务“${task.title}”`}
+                >
+                  删除
+                </button>
               </li>
             ))}
           </ul>

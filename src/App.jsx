@@ -38,6 +38,7 @@ function App() {
   const [board, setBoard] = useState(loadTaskBoard)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all')
+  const [editingTask, setEditingTask] = useState(null)
   const { tasks, storageReady, storageError } = board
 
   function updateTasks(nextTasks) {
@@ -83,6 +84,21 @@ function App() {
     if (!confirmed) return
 
     updateTasks(tasks.filter((item) => item.id !== task.id))
+  }
+
+  function saveTask(event) {
+    event.preventDefault()
+    const title = editingTask.title.trim()
+
+    if (!title) {
+      setEditingTask({ ...editingTask, error: '任务名称不能为空，也不能只输入空格。' })
+      return
+    }
+
+    updateTasks(tasks.map((task) => (
+      task.id === editingTask.id ? { ...task, title } : task
+    )))
+    setEditingTask(null)
   }
 
   const completedCount = tasks.filter((task) => task.completed).length
@@ -133,6 +149,7 @@ function App() {
               type="button"
               className="filter-button"
               aria-pressed={filter === option.value}
+              disabled={Boolean(editingTask)}
               onClick={() => setFilter(option.value)}
             >
               {option.label}
@@ -153,26 +170,63 @@ function App() {
           <ul className="task-list">
             {visibleTasks.map((task) => (
               <li key={task.id}>
-                <label className={`task-item${task.completed ? ' is-complete' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(task.completed)}
-                    onChange={() => toggleTask(task.id)}
-                    aria-label={task.completed
-                      ? `将“${task.title}”恢复为未完成`
-                      : `将“${task.title}”标记为完成`}
-                  />
-                  <span className="task-title">{task.title}</span>
-                  <span className="task-state">{task.completed ? '已完成' : '待完成'}</span>
-                </label>
-                <button
-                  type="button"
-                  className="delete-button"
-                  onClick={() => deleteTask(task)}
-                  aria-label={`删除任务“${task.title}”`}
-                >
-                  删除
-                </button>
+                {editingTask?.id === task.id ? (
+                  <form className="edit-form" onSubmit={saveTask}>
+                    <label htmlFor={`edit-task-${task.id}`}>修改任务名称</label>
+                    <div className="edit-input-row">
+                      <input
+                        id={`edit-task-${task.id}`}
+                        value={editingTask.title}
+                        onChange={(event) => setEditingTask({ ...editingTask, title: event.target.value, error: '' })}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') setEditingTask(null)
+                        }}
+                        aria-invalid={Boolean(editingTask.error)}
+                        aria-describedby={editingTask.error ? `edit-error-${task.id}` : undefined}
+                        autoFocus
+                      />
+                      <div className="task-actions">
+                        <button type="submit" className="save-button">保存</button>
+                        <button type="button" className="cancel-button" onClick={() => setEditingTask(null)}>取消</button>
+                      </div>
+                    </div>
+                    {editingTask.error && <p id={`edit-error-${task.id}`} className="error" role="alert">{editingTask.error}</p>}
+                  </form>
+                ) : (
+                  <>
+                    <label className={`task-item${task.completed ? ' is-complete' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(task.completed)}
+                        onChange={() => toggleTask(task.id)}
+                        aria-label={task.completed
+                          ? `将“${task.title}”恢复为未完成`
+                          : `将“${task.title}”标记为完成`}
+                      />
+                      <span className="task-title">{task.title}</span>
+                      <span className="task-state">{task.completed ? '已完成' : '待完成'}</span>
+                    </label>
+                    <div className="task-actions">
+                      <button
+                        type="button"
+                        className="edit-button"
+                        onClick={() => setEditingTask({ id: task.id, title: task.title, error: '' })}
+                        disabled={Boolean(editingTask)}
+                        aria-label={`编辑任务“${task.title}”`}
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        className="delete-button"
+                        onClick={() => deleteTask(task)}
+                        aria-label={`删除任务“${task.title}”`}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>

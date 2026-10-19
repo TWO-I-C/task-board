@@ -48,3 +48,9 @@ npm run preview -- --base=/task-board/
 4. 删除测试任务，确认刷新后不会重新出现。
 
 部署参考：[Vite 官方指南](https://vite.dev/guide/static-deploy.html#github-pages)、[GitHub Pages 工作流说明](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
+## 第二阶段学习实验
+
+[第 1 课：让后端回答一个请求](docs/lessons/01-first-api.md)。在本地运行 `npm run server`，访问 `http://127.0.0.1:3001/api/health`。
+
+目前任务板页面尚未调用这个 API，任务仍保存在浏览器中。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。

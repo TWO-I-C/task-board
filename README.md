@@ -53,4 +53,6 @@ npm run preview -- --base=/task-board/
 
 [第 1 课：让后端回答一个请求](docs/lessons/01-first-api.md)。在本地运行 `npm run server`，访问 `http://127.0.0.1:3001/api/health`。
 
-目前任务板页面尚未调用这个 API，任务仍保存在浏览器中。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。
+[第 2 课：让页面调用后端](docs/lessons/02-connect-backend.md)。同时运行 `npm run server` 与 `npm run dev`，在本地任务板底部点击“检查后端连接”。
+
+本地开发页面会通过 Vite 转发请求到后端，显示本次连接的结果；任务仍保存在浏览器中。学习面板只在开发模式显示。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。

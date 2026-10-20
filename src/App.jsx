@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import BackendConnection from './BackendConnection.jsx'
 import './App.css'
 
 const STORAGE_KEY = 'task-board.tasks.v1'
@@ -238,6 +239,7 @@ function App() {
       >
         {storageError || '任务会自动保存在当前浏览器，刷新后仍会保留。清除网站数据会删除这些任务。'}
       </p>
+      {import.meta.env.DEV && <BackendConnection />}
     </main>
   )
 }

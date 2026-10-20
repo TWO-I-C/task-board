@@ -75,6 +75,9 @@ h2 { margin: 0; font-size: 18px; }
 .connection-details dt { color: #68766e; }
 .connection-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .connection-note { margin: 16px 0 0; color: #68766e; font-size: 13px; }
+.backend-task-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.backend-task-list li { display: flex; align-items: baseline; gap: 16px; padding: 14px 0; overflow-wrap: anywhere; }
+.backend-task-list li + li { border-top: 1px solid #e8ece8; }
 @media (max-width: 520px) {
   .task-board { margin: 36px auto; }
   .input-row { flex-direction: column; }

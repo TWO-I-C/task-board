@@ -55,4 +55,6 @@ npm run preview -- --base=/task-board/
 
 [第 2 课：让页面调用后端](docs/lessons/02-connect-backend.md)。同时运行 `npm run server` 与 `npm run dev`，在本地任务板底部点击“检查后端连接”。
 
-本地开发页面会通过 Vite 转发请求到后端，显示本次连接的结果；任务仍保存在浏览器中。学习面板只在开发模式显示。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。
+[第 3 课：读取后端任务列表](docs/lessons/03-read-backend-tasks.md)。访问 `http://127.0.0.1:3001/api/tasks` 查看 JSON，再在本地页面点击“读取后端任务”，对照两种展示。
+
+本地开发页面会通过 Vite 转发请求到后端。上方“我的任务”仍保存在浏览器中；下方“后端示例任务”来自后端代码里的固定数组，只能读取，尚未连接数据库，两份列表互不影响。学习面板只在开发模式显示。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。

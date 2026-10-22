@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "vite",
     "server": "node --watch server/index.js",
+    "db:init": "node server/init-db.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "pg": "^8.23.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

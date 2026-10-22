@@ -10,6 +10,8 @@
 
 本地开发地址和线上网址属于不同来源，各自保存自己的任务。首次打开线上网站时看不到本地开发时的任务，这是正常的。
 
+本地学习面板中的“后端任务”通过 Node.js 写入 PostgreSQL 的 `task_board` 数据库、`tasks` 表。它与上方个人任务独立；后端和数据库服务重启后，已提交的数据仍保留。
+
 ## 本地开发
 
 使用 Node.js 24。在项目目录中执行：
@@ -20,6 +22,25 @@ npm run dev
 ```
 
 打开终端显示的本地网址。已经安装依赖且依赖文件没有变化时，只需执行 `npm run dev`。
+
+## 本地数据库与后端
+
+当前学习环境已创建数据库并导入接入前的 3 条后端任务。保持 Postgres.app 运行，再执行 `npm run server`。`.env` 保存本地数据库配置，已加入 Git 忽略；`.env.example` 是供其他环境参考的模板。
+
+新环境按第 5 课先安装 PostgreSQL，再创建项目数据库。使用 Postgres.app 时，可以在终端运行下面的命令一次（已存在时无需再创建）：
+
+```bash
+/Applications/Postgres.app/Contents/Versions/latest/bin/createdb -h 127.0.0.1 -p 5432 task_board
+```
+
+需要自定义连接时，把 `.env.example` 复制为 `.env` 并填写自己的 PostgreSQL 用户；保留已有 `.env`。未设置时，后端默认连接本机 5432 端口的 `task_board`，用户名取当前系统用户。
+
+```bash
+npm run db:init
+npm run server
+```
+
+`db:init` 只创建缺少的表，不清空或填入示例数据。新环境的任务表起初为空；当前电脑接入前的记录已单独迁移。GET 使用 SELECT，POST 使用带参数的 INSERT；数据库请求失败返回 503，不回退到内存。`/api/health` 只检查后端进程，数据库停止时它仍可能返回 200。
 
 ## 构建与预览上线版本
 
@@ -59,4 +80,8 @@ npm run preview -- --base=/task-board/
 
 [第 4 课：向后端新增任务](docs/lessons/04-create-backend-tasks.md)。在“本地学习实验：后端任务”中输入名称，点击“新增到后端”，观察 POST 请求及重启后的数据变化。
 
-本地开发页面会通过 Vite 转发请求到后端。上方“我的任务”仍保存在浏览器中；下方后端任务支持读取和新增，只存在后端进程内存中。重启后端会丢失新增数据，并重新加载两条初始示例；尚未连接数据库，两份列表互不影响。学习面板只在开发模式显示。这个 Node.js 后端只在本机运行，GitHub Pages 的静态部署不会运行它。
+[第 5 课（上）：启动 PostgreSQL 并验证连接](docs/lessons/05-postgresql-setup.md)。先安装本地数据库并执行一次查询；完成连接验收后，再将任务接口接入数据库。
+
+[第 5 课（下）：让任务保存到 PostgreSQL](docs/lessons/05-postgresql-persistence.md)。观察 SQL 读写、后端重启、数据库停止和恢复，验证持久化。
+
+本地开发页面通过 Vite 转发请求到后端，下方任务现已连接 PostgreSQL。前面课程文档保留各阶段的实验背景，当前行为以第 5 课为准。学习面板只在开发模式显示；GitHub Pages 仍只发布浏览器本地任务板，不运行这个 Node.js 后端或 PostgreSQL。

@@ -13,7 +13,8 @@ async function fetchTasks() {
     signal: AbortSignal.timeout(5000),
   })
   if (!response.ok) {
-    throw new Error(`读取失败（HTTP ${response.status}），请检查后端后重试。`)
+    const data = await response.json().catch(() => null)
+    throw new Error(`读取失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端后重试。'}`)
   }
   const data = await response.json()
   if (!Array.isArray(data?.tasks) || !data.tasks.every(isTask)
@@ -126,7 +127,7 @@ export default function BackendTasks() {
         </button>
       </div>
       <p className="connection-note">
-        这里的任务保存在后端内存，独立于上方“我的任务”。重启后端会丢失新增任务。
+        这里的任务通过后端保存到 PostgreSQL，独立于上方“我的任务”。重启后端后仍会保留。
       </p>
       <form className="task-form backend-task-form" onSubmit={addTask}>
         <label htmlFor="backend-task-title">后端任务名称</label>
@@ -171,7 +172,7 @@ export default function BackendTasks() {
         )
       )}
       <p className="connection-note">
-        新增成功后自动读取列表；刷新页面后需点击读取。当前尚未连接数据库。
+        新增成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
       </p>
     </section>
   )

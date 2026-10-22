@@ -70,7 +70,7 @@ export default function BackendConnection() {
         </dl>
       )}
       <p className="connection-note">
-        这里显示本次请求的结果；再次点击才会更新。任务仍保存在当前浏览器中。
+        这里显示本次请求的结果；再次点击才会更新。此检查只确认后端能响应，不检查数据库。
       </p>
     </section>
   )

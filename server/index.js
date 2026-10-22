@@ -1,14 +1,9 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { insertTask, listTasks, pool } from './database.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
-
-// 每次启动都从这两条示例开始。新增任务只在进程内存中，重启后丢失。
-const tasks = [
-  { id: 'server-task-1', title: '读懂任务 API 的响应', completed: true },
-  { id: 'server-task-2', title: '在页面读取后端任务', completed: false },
-]
 
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, {
@@ -81,20 +76,24 @@ const server = createServer(async (request, response) => {
       if (title.length > 200) {
         throw requestError(400, '任务名称不能超过 200 个字符。')
       }
+      if (title.includes('\u0000')) {
+        throw requestError(400, '任务名称不能包含空字符。')
+      }
 
       // 身份和初始完成状态由后端决定，不采用客户端传来的值。
-      const task = { id: randomUUID(), title, completed: false }
-      tasks.push(task)
+      // 等数据库确认写入后，才返回创建成功。
+      const task = await insertTask(randomUUID(), title)
       sendJson(response, 201, { task })
       return
     }
 
     if (pathname === '/api/tasks') {
+      const tasks = await listTasks()
       sendJson(response, 200, { tasks })
       return
     }
 
-    // 这个接口只确认当前后端能够响应，尚未检查数据库等其他服务。
+    // 这个接口只确认后端进程能够响应，不检查数据库。
     sendJson(response, 200, {
       status: 'ok',
       service: 'task-board-api',
@@ -108,6 +107,18 @@ const server = createServer(async (request, response) => {
     }
   }
 })
+
+let closing = false
+function shutdown() {
+  if (closing) return
+  closing = true
+  server.close(() => {
+    pool.end().catch(() => { process.exitCode = 1 })
+  })
+  server.closeIdleConnections()
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 server.on('error', (error) => {
   console.error(error.code === 'EADDRINUSE'

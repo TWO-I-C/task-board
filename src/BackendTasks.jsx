@@ -113,6 +113,48 @@ export default function BackendTasks() {
     }
   }
 
+  async function changeCompleted(task, completed) {
+    if (pending || result.state !== 'success') return
+    setPending(`update:${task.id}`)
+    setResult((previous) => ({ ...previous, state: 'loading', message: '正在保存任务状态…' }))
+    let saved = false
+    let rejected = false
+
+    try {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed }),
+        signal: AbortSignal.timeout(5000),
+      })
+      if (response.status !== 200) {
+        rejected = [400, 404, 413, 415].includes(response.status)
+        const data = await response.json().catch(() => null)
+        throw new Error(`修改失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端。'}`)
+      }
+      saved = true
+      const data = await response.json()
+      if (!isTask(data?.task) || data.task.id !== task.id || data.task.completed !== completed) {
+        throw new Error('修改响应的任务格式不符合预期。')
+      }
+      // 不提前更改勾选状态；保存确认后重新读取，展示数据库中的最新结果。
+      showTasks(await fetchTasks(), '状态保存成功，已重新读取后端列表')
+    } catch (error) {
+      const outcome = saved
+        ? '后端已确认保存成功，但列表未能更新。'
+        : rejected
+          ? '后端拒绝了本次修改。'
+          : '本次修改结果未确认。'
+      setResult((previous) => ({
+        ...previous,
+        state: 'error',
+        message: `${outcome} 下方保留的是上次读取的状态，请恢复连接后重新读取，再继续操作。${errorMessage(error)}`,
+      }))
+    } finally {
+      setPending(null)
+    }
+  }
+
   return (
     <section className="backend-connection" aria-labelledby="backend-tasks-title">
       <div className="connection-heading">
@@ -157,22 +199,33 @@ export default function BackendTasks() {
       >
         {result.message}
       </p>
-      {result.state === 'success' && (
+      {result.tasks && (
         result.tasks.length === 0 ? (
           <p className="connection-note">后端任务列表为空。</p>
         ) : (
           <ul className="backend-task-list" aria-label="后端任务列表">
             {result.tasks.map((task) => (
               <li key={task.id} className={task.completed ? 'is-complete' : undefined}>
-                <span className="task-title">{task.title}</span>
-                <span className="task-state">{task.completed ? '已完成' : '未完成'}</span>
+                <label className="task-item">
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={(event) => changeCompleted(task, event.target.checked)}
+                    disabled={Boolean(pending) || result.state !== 'success'}
+                    aria-label={`后端任务：${task.title}`}
+                  />
+                  <span className="task-title">{task.title}</span>
+                </label>
+                <span className="task-state">
+                  {pending === `update:${task.id}` ? '正在保存…' : task.completed ? '已完成' : '未完成'}
+                </span>
               </li>
             ))}
           </ul>
         )
       )}
       <p className="connection-note">
-        新增成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
+        勾选可完成或取消完成。新增和修改成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
       </p>
     </section>
   )

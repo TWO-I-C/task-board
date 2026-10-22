@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { insertTask, listTasks, pool } from './database.js'
+import { insertTask, listTasks, pool, setTaskCompleted } from './database.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -26,7 +26,7 @@ function readJson(request) {
       size += chunk.length
       if (size > 16 * 1024) {
         chunks = []
-        reject(requestError(413, '请求内容过大，请缩短任务名称。'))
+        reject(requestError(413, '请求内容过大，请减少发送的内容。'))
         return
       }
       chunks.push(chunk)
@@ -47,16 +47,43 @@ function readJson(request) {
 const server = createServer(async (request, response) => {
   try {
     const pathname = request.url.split('?')[0]
+    const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/)
 
-    if (pathname !== '/api/health' && pathname !== '/api/tasks') {
+    if (pathname !== '/api/health' && pathname !== '/api/tasks' && !taskMatch) {
       sendJson(response, 404, { error: '接口不存在' })
       return
     }
 
-    const allowedMethods = pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
+    const allowedMethods = taskMatch ? ['PATCH'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
     if (!allowedMethods.includes(request.method)) {
       response.setHeader('Allow', allowedMethods.join(', '))
       sendJson(response, 405, { error: `这个接口只支持 ${allowedMethods.join('、')} 请求` })
+      return
+    }
+
+    if (taskMatch) {
+      let id
+      try {
+        id = decodeURIComponent(taskMatch[1])
+      } catch {
+        throw requestError(400, '任务 ID 编码无效。')
+      }
+      if (!id.trim() || id.includes('\u0000') || id.includes('/')) {
+        throw requestError(400, '任务 ID 无效。')
+      }
+      const contentType = request.headers['content-type']?.split(';')[0].trim().toLowerCase()
+      if (contentType !== 'application/json') {
+        request.resume()
+        throw requestError(415, '请使用 application/json 发送任务状态。')
+      }
+      const data = await readJson(request)
+      if (data === null || typeof data !== 'object' || Array.isArray(data)
+        || typeof data.completed !== 'boolean' || Object.keys(data).length !== 1) {
+        throw requestError(400, '本接口只接受 completed 字段，值必须是 true 或 false。')
+      }
+      const task = await setTaskCompleted(id, data.completed)
+      if (!task) throw requestError(404, '任务不存在，请重新读取后端任务。')
+      sendJson(response, 200, { task })
       return
     }
 

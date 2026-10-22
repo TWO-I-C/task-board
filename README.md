@@ -40,7 +40,9 @@ npm run db:init
 npm run server
 ```
 
-`db:init` 只创建缺少的表，不清空或填入示例数据。新环境的任务表起初为空；当前电脑接入前的记录已单独迁移。GET 使用 SELECT，POST 使用带参数的 INSERT；数据库请求失败返回 503，不回退到内存。`/api/health` 只检查后端进程，数据库停止时它仍可能返回 200。
+`db:init` 只创建缺少的表，不清空或填入示例数据。新环境的任务表起初为空；当前电脑接入前的记录已单独迁移。GET 使用 SELECT，POST 使用带参数的 INSERT；PATCH 按 ID 使用带参数的 UPDATE 保存完成状态。数据库请求失败返回 503，不回退到内存。`/api/health` 只检查后端进程，数据库停止时它仍可能返回 200。
+
+`PATCH /api/tasks/:id` 目前只接受 `{ "completed": true }` 或 `{ "completed": false }`，成功返回 200 和修改后的任务；无效内容返回 400，不存在的任务返回 404。页面等待保存确认并重新读取后才更新勾选状态。修改失败时保留上次读取的状态、暂时禁用勾选，并提示重新读取。
 
 ## 构建与预览上线版本
 
@@ -84,4 +86,6 @@ npm run preview -- --base=/task-board/
 
 [第 5 课（下）：让任务保存到 PostgreSQL](docs/lessons/05-postgresql-persistence.md)。观察 SQL 读写、后端重启、数据库停止和恢复，验证持久化。
 
-本地开发页面通过 Vite 转发请求到后端，下方任务现已连接 PostgreSQL。前面课程文档保留各阶段的实验背景，当前行为以第 5 课为准。学习面板只在开发模式显示；GitHub Pages 仍只发布浏览器本地任务板，不运行这个 Node.js 后端或 PostgreSQL。
+[第 6 课：保存后端任务的完成状态](docs/lessons/06-update-backend-tasks.md)。用 PATCH 和 SQL UPDATE 修改指定任务，验证同名任务隔离、重启保留和失败后的页面反馈。
+
+本地开发页面通过 Vite 转发请求到后端，下方任务现已连接 PostgreSQL。前面课程文档保留各阶段的实验背景，当前行为以第 6 课为准。学习面板只在开发模式显示；GitHub Pages 仍只发布浏览器本地任务板，不运行这个 Node.js 后端或 PostgreSQL。

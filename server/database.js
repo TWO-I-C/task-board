@@ -49,3 +49,12 @@ export async function insertTask(id, title) {
   )
   return result.rows[0]
 }
+
+export async function setTaskCompleted(id, completed) {
+  // 按 ID 更新一条任务，明确设置目标值；重复提交 true 不会把状态翻回 false。
+  const result = await query(
+    'UPDATE tasks SET completed = $1 WHERE id = $2 RETURNING id, title, completed',
+    [completed, id],
+  )
+  return result.rows[0] ?? null
+}

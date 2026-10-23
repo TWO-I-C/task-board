@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { insertTask, listTasks, pool, setTaskCompleted } from './database.js'
+import { insertTask, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -15,6 +15,16 @@ function sendJson(response, statusCode, data) {
 
 function requestError(statusCode, message) {
   return Object.assign(new Error(message), { statusCode })
+}
+
+function validatedTitle(value) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw requestError(400, '任务名称不能为空，且必须是文本。')
+  }
+  const title = value.trim()
+  if (title.length > 200) throw requestError(400, '任务名称不能超过 200 个字符。')
+  if (title.includes('\u0000')) throw requestError(400, '任务名称不能包含空字符。')
+  return title
 }
 
 function readJson(request) {
@@ -74,14 +84,23 @@ const server = createServer(async (request, response) => {
       const contentType = request.headers['content-type']?.split(';')[0].trim().toLowerCase()
       if (contentType !== 'application/json') {
         request.resume()
-        throw requestError(415, '请使用 application/json 发送任务状态。')
+        throw requestError(415, '请使用 application/json 发送任务修改。')
       }
       const data = await readJson(request)
       if (data === null || typeof data !== 'object' || Array.isArray(data)
-        || typeof data.completed !== 'boolean' || Object.keys(data).length !== 1) {
-        throw requestError(400, '本接口只接受 completed 字段，值必须是 true 或 false。')
+        || Object.keys(data).length !== 1
+        || !['completed', 'title'].includes(Object.keys(data)[0])) {
+        throw requestError(400, '每次只能修改 title 或 completed 中的一个字段。')
       }
-      const task = await setTaskCompleted(id, data.completed)
+      let task
+      if (Object.hasOwn(data, 'title')) {
+        task = await setTaskTitle(id, validatedTitle(data.title))
+      } else {
+        if (typeof data.completed !== 'boolean') {
+          throw requestError(400, 'completed 必须是 true 或 false。')
+        }
+        task = await setTaskCompleted(id, data.completed)
+      }
       if (!task) throw requestError(404, '任务不存在，请重新读取后端任务。')
       sendJson(response, 200, { task })
       return
@@ -95,17 +114,10 @@ const server = createServer(async (request, response) => {
       }
 
       const data = await readJson(request)
-      if (data === null || typeof data !== 'object' || Array.isArray(data)
-        || typeof data.title !== 'string' || data.title.trim() === '') {
+      if (data === null || typeof data !== 'object' || Array.isArray(data)) {
         throw requestError(400, '任务名称不能为空，且必须是文本。')
       }
-      const title = data.title.trim()
-      if (title.length > 200) {
-        throw requestError(400, '任务名称不能超过 200 个字符。')
-      }
-      if (title.includes('\u0000')) {
-        throw requestError(400, '任务名称不能包含空字符。')
-      }
+      const title = validatedTitle(data.title)
 
       // 身份和初始完成状态由后端决定，不采用客户端传来的值。
       // 等数据库确认写入后，才返回创建成功。

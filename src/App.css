@@ -81,6 +81,8 @@ h2 { margin: 0; font-size: 18px; }
 .backend-task-list input:disabled { cursor: default; }
 .backend-task-list li + li { border-top: 1px solid #e8ece8; }
 .backend-task-form { margin-top: 24px; }
+.backend-edit-form { margin-top: 16px; padding: 16px; border: 1px solid #d9e0da; border-radius: 10px; background: #f5f7f3; }
+.backend-edit-form .connection-note { margin: 0 0 12px; overflow-wrap: anywhere; }
 @media (max-width: 520px) {
   .task-board { margin: 36px auto; }
   .input-row { flex-direction: column; }

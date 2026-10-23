@@ -34,6 +34,7 @@ function errorMessage(error) {
 export default function BackendTasks() {
   const [draft, setDraft] = useState('')
   const [formError, setFormError] = useState('')
+  const [editing, setEditing] = useState(null)
   const [pending, setPending] = useState(null)
   const [result, setResult] = useState({
     state: 'idle',
@@ -53,9 +54,20 @@ export default function BackendTasks() {
     setPending('read')
     setResult({ state: 'loading', message: '正在读取后端任务…' })
     try {
-      showTasks(await fetchTasks(), '读取成功')
+      const tasks = await fetchTasks()
+      showTasks(tasks, '读取成功')
+      if (editing) {
+        const current = tasks.find((task) => task.id === editing.id)
+        setEditing((previous) => ({
+          ...previous,
+          originalTitle: current?.title ?? previous.originalTitle,
+          needsReload: !current,
+          error: current ? '' : '这条任务已不存在，编辑文字已保留，请取消编辑。',
+        }))
+      }
     } catch (error) {
       setResult({ state: 'error', message: errorMessage(error) })
+      if (editing) setEditing((previous) => ({ ...previous, needsReload: true }))
     } finally {
       setPending(null)
     }
@@ -63,7 +75,7 @@ export default function BackendTasks() {
 
   async function addTask(event) {
     event.preventDefault()
-    if (pending) return
+    if (pending || editing) return
     const title = draft.trim()
     if (!title || title.length > 200) {
       setFormError('请填写 1–200 个字符的任务名称，不能只输入空格。')
@@ -114,7 +126,7 @@ export default function BackendTasks() {
   }
 
   async function changeCompleted(task, completed) {
-    if (pending || result.state !== 'success') return
+    if (pending || editing || result.state !== 'success') return
     setPending(`update:${task.id}`)
     setResult((previous) => ({ ...previous, state: 'loading', message: '正在保存任务状态…' }))
     let saved = false
@@ -155,6 +167,71 @@ export default function BackendTasks() {
     }
   }
 
+  function beginEdit(task) {
+    setEditing({ id: task.id, title: task.title, originalTitle: task.title, error: '', needsReload: false })
+    showTasks(result.tasks, '正在编辑名称，输入框中的文字尚未保存')
+  }
+
+  function cancelEdit() {
+    if (pending) return
+    setEditing(null)
+    if (result.state === 'success') {
+      showTasks(result.tasks, '已关闭编辑框，保留已读取的名称')
+    } else {
+      setResult((previous) => ({ ...previous, message: '已关闭编辑框。请重新读取后端任务，确认数据库中的最新名称。' }))
+    }
+  }
+
+  async function saveTitle(event) {
+    event.preventDefault()
+    if (pending || !editing || editing.needsReload || result.state !== 'success') return
+    const title = editing.title.trim()
+    if (!title || title.length > 200 || title.includes('\u0000')) {
+      setEditing((previous) => ({ ...previous, error: '请填写 1–200 个字符的任务名称，不能只输入空格或包含空字符。' }))
+      return
+    }
+    const id = editing.id
+    setEditing((previous) => ({ ...previous, error: '' }))
+    setPending(`rename:${id}`)
+    setResult((previous) => ({ ...previous, state: 'loading', message: '正在保存任务名称…' }))
+    let saved = false
+    let rejected = false
+    try {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+        signal: AbortSignal.timeout(5000),
+      })
+      if (response.status !== 200) {
+        rejected = [400, 404, 413, 415].includes(response.status)
+        const data = await response.json().catch(() => null)
+        throw new Error(`修改失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端。'}`)
+      }
+      saved = true
+      const data = await response.json()
+      if (!isTask(data?.task) || data.task.id !== id || data.task.title !== title) {
+        throw new Error('修改响应的任务格式不符合预期。')
+      }
+      showTasks(await fetchTasks(), '名称保存成功，已重新读取后端列表')
+      setEditing(null)
+    } catch (error) {
+      const outcome = saved
+        ? '后端已确认名称保存成功，但列表未能更新。'
+        : rejected
+          ? '后端拒绝了本次改名。'
+          : '本次改名结果未确认。'
+      setResult((previous) => ({
+        ...previous,
+        state: 'error',
+        message: `${outcome} 编辑文字已保留。请恢复连接后点击“读取后端任务”，核对已保存的名称后再继续。${errorMessage(error)}`,
+      }))
+      setEditing((previous) => ({ ...previous, needsReload: true }))
+    } finally {
+      setPending(null)
+    }
+  }
+
   return (
     <section className="backend-connection" aria-labelledby="backend-tasks-title">
       <div className="connection-heading">
@@ -183,11 +260,11 @@ export default function BackendTasks() {
             }}
             placeholder="例如：学习 POST 请求"
             maxLength={200}
-            disabled={Boolean(pending)}
+            disabled={Boolean(pending) || Boolean(editing)}
             aria-invalid={Boolean(formError)}
             aria-describedby={formError ? 'backend-task-error' : undefined}
           />
-          <button type="submit" disabled={Boolean(pending)}>
+          <button type="submit" disabled={Boolean(pending) || Boolean(editing)}>
             {pending === 'create' ? '正在新增…' : '新增到后端'}
           </button>
         </div>
@@ -199,6 +276,35 @@ export default function BackendTasks() {
       >
         {result.message}
       </p>
+      {editing && (
+        <form className="edit-form backend-edit-form" onSubmit={saveTitle}>
+          <label htmlFor="backend-edit-title">修改后端任务名称</label>
+          <p className="connection-note">上次读取的名称：{editing.originalTitle}</p>
+          <div className="edit-input-row">
+            <input
+              id="backend-edit-title"
+              value={editing.title}
+              onChange={(event) => setEditing({ ...editing, title: event.target.value, error: '' })}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') cancelEdit()
+              }}
+              maxLength={200}
+              disabled={Boolean(pending)}
+              aria-invalid={Boolean(editing.error)}
+              aria-describedby={editing.error ? 'backend-edit-error' : undefined}
+              autoFocus
+            />
+            <div className="task-actions">
+              <button className="save-button" type="submit" disabled={Boolean(pending) || editing.needsReload || result.state !== 'success'}>
+                {pending === `rename:${editing.id}` ? '正在保存…' : '保存名称'}
+              </button>
+              <button className="cancel-button" type="button" onClick={cancelEdit} disabled={Boolean(pending)}>取消编辑</button>
+            </div>
+          </div>
+          {editing.error && <p id="backend-edit-error" className="error" role="alert">{editing.error}</p>}
+          {editing.needsReload && <p className="connection-note">请先重新读取；编辑框里的文字会保留，读取成功后可核对并保存或取消。</p>}
+        </form>
+      )}
       {result.tasks && (
         result.tasks.length === 0 ? (
           <p className="connection-note">后端任务列表为空。</p>
@@ -211,7 +317,7 @@ export default function BackendTasks() {
                     type="checkbox"
                     checked={task.completed}
                     onChange={(event) => changeCompleted(task, event.target.checked)}
-                    disabled={Boolean(pending) || result.state !== 'success'}
+                    disabled={Boolean(pending) || Boolean(editing) || result.state !== 'success'}
                     aria-label={`后端任务：${task.title}`}
                   />
                   <span className="task-title">{task.title}</span>
@@ -219,13 +325,20 @@ export default function BackendTasks() {
                 <span className="task-state">
                   {pending === `update:${task.id}` ? '正在保存…' : task.completed ? '已完成' : '未完成'}
                 </span>
+                <button
+                  type="button"
+                  className="edit-button"
+                  aria-label={`编辑后端任务“${task.title}”`}
+                  onClick={() => beginEdit(task)}
+                  disabled={Boolean(pending) || Boolean(editing) || result.state !== 'success'}
+                >编辑</button>
               </li>
             ))}
           </ul>
         )
       )}
       <p className="connection-note">
-        勾选可完成或取消完成。新增和修改成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
+        勾选可完成或取消完成，点击编辑可改名。新增和修改成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
       </p>
     </section>
   )

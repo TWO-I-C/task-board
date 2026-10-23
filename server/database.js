@@ -58,3 +58,11 @@ export async function setTaskCompleted(id, completed) {
   )
   return result.rows[0] ?? null
 }
+
+export async function setTaskTitle(id, title) {
+  const result = await query(
+    'UPDATE tasks SET title = $1 WHERE id = $2 RETURNING id, title, completed',
+    [title, id],
+  )
+  return result.rows[0] ?? null
+}

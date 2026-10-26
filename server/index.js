@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { insertTask, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
+import { deleteTask, insertTask, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -64,7 +64,7 @@ const server = createServer(async (request, response) => {
       return
     }
 
-    const allowedMethods = taskMatch ? ['PATCH'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
+    const allowedMethods = taskMatch ? ['PATCH', 'DELETE'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
     if (!allowedMethods.includes(request.method)) {
       response.setHeader('Allow', allowedMethods.join(', '))
       sendJson(response, 405, { error: `这个接口只支持 ${allowedMethods.join('、')} 请求` })
@@ -80,6 +80,14 @@ const server = createServer(async (request, response) => {
       }
       if (!id.trim() || id.includes('\u0000') || id.includes('/')) {
         throw requestError(400, '任务 ID 无效。')
+      }
+      if (request.method === 'DELETE') {
+        // 删除对象只由 URL 中的 ID 决定，不读取请求正文里的其他任务信息。
+        request.resume()
+        const task = await deleteTask(id)
+        if (!task) throw requestError(404, '任务已不存在，请重新读取后端任务。')
+        sendJson(response, 200, { task })
+        return
       }
       const contentType = request.headers['content-type']?.split(';')[0].trim().toLowerCase()
       if (contentType !== 'application/json') {

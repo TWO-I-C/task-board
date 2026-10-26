@@ -66,3 +66,11 @@ export async function setTaskTitle(id, title) {
   )
   return result.rows[0] ?? null
 }
+
+export async function deleteTask(id) {
+  const result = await query(
+    'DELETE FROM tasks WHERE id = $1 RETURNING id, title, completed',
+    [id],
+  )
+  return result.rows[0] ?? null
+}

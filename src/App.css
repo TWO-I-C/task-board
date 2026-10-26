@@ -83,6 +83,9 @@ h2 { margin: 0; font-size: 18px; }
 .backend-task-form { margin-top: 24px; }
 .backend-edit-form { margin-top: 16px; padding: 16px; border: 1px solid #d9e0da; border-radius: 10px; background: #f5f7f3; }
 .backend-edit-form .connection-note { margin: 0 0 12px; overflow-wrap: anywhere; }
+.backend-delete-confirm { margin-top: 16px; padding: 16px; border: 1px solid #e5c9c5; border-radius: 10px; background: #fff8f6; overflow-wrap: anywhere; }
+.backend-delete-confirm h3 { margin: 0 0 8px; font-size: 16px; }
+.backend-delete-confirm .task-actions { margin-top: 12px; flex-wrap: wrap; }
 @media (max-width: 520px) {
   .task-board { margin: 36px auto; }
   .input-row { flex-direction: column; }
@@ -93,6 +96,9 @@ h2 { margin: 0; font-size: 18px; }
   .edit-input-row { flex-direction: column; }
   .edit-input-row .task-actions { justify-content: flex-end; }
   .backend-connection { padding: 18px; }
+  .backend-task-list li { flex-wrap: wrap; gap: 8px; }
+  .backend-task-list .task-item { flex-basis: calc(100% - 70px); }
+  .backend-task-list .task-actions { margin-left: 34px; }
   .connection-heading { align-items: stretch; flex-direction: column; }
   .connection-details { grid-template-columns: 1fr; gap: 6px; }
   .connection-details dd + dt { margin-top: 6px; }

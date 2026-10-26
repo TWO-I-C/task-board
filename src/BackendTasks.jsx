@@ -35,6 +35,7 @@ export default function BackendTasks() {
   const [draft, setDraft] = useState('')
   const [formError, setFormError] = useState('')
   const [editing, setEditing] = useState(null)
+  const [deleting, setDeleting] = useState(null)
   const [pending, setPending] = useState(null)
   const [result, setResult] = useState({
     state: 'idle',
@@ -50,7 +51,7 @@ export default function BackendTasks() {
   }
 
   async function loadTasks() {
-    if (pending) return
+    if (pending || deleting) return
     setPending('read')
     setResult({ state: 'loading', message: '正在读取后端任务…' })
     try {
@@ -75,7 +76,7 @@ export default function BackendTasks() {
 
   async function addTask(event) {
     event.preventDefault()
-    if (pending || editing) return
+    if (pending || editing || deleting) return
     const title = draft.trim()
     if (!title || title.length > 200) {
       setFormError('请填写 1–200 个字符的任务名称，不能只输入空格。')
@@ -126,7 +127,7 @@ export default function BackendTasks() {
   }
 
   async function changeCompleted(task, completed) {
-    if (pending || editing || result.state !== 'success') return
+    if (pending || editing || deleting || result.state !== 'success') return
     setPending(`update:${task.id}`)
     setResult((previous) => ({ ...previous, state: 'loading', message: '正在保存任务状态…' }))
     let saved = false
@@ -168,6 +169,7 @@ export default function BackendTasks() {
   }
 
   function beginEdit(task) {
+    if (pending || editing || deleting || result.state !== 'success') return
     setEditing({ id: task.id, title: task.title, originalTitle: task.title, error: '', needsReload: false })
     showTasks(result.tasks, '正在编辑名称，输入框中的文字尚未保存')
   }
@@ -232,6 +234,58 @@ export default function BackendTasks() {
     }
   }
 
+  function beginDelete(task) {
+    if (pending || editing || deleting || result.state !== 'success') return
+    setDeleting(task)
+    showTasks(result.tasks, '请确认是否删除，尚未发送删除请求')
+  }
+
+  function cancelDelete() {
+    if (pending) return
+    setDeleting(null)
+    showTasks(result.tasks, '已取消删除，未发送删除请求')
+  }
+
+  async function confirmDelete() {
+    if (pending || !deleting || editing || result.state !== 'success') return
+    const id = deleting.id
+    setPending(`delete:${id}`)
+    setResult((previous) => ({ ...previous, state: 'loading', message: '正在删除后端任务…' }))
+    let removed = false
+    let missing = false
+    try {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(5000),
+      })
+      if (response.status !== 200) {
+        missing = response.status === 404
+        const data = await response.json().catch(() => null)
+        throw new Error(`删除请求未成功（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端。'}`)
+      }
+      removed = true
+      const data = await response.json()
+      if (!isTask(data?.task) || data.task.id !== id) {
+        throw new Error('删除响应的任务格式不符合预期。')
+      }
+      showTasks(await fetchTasks(), '删除成功，已重新读取后端列表')
+    } catch (error) {
+      const outcome = removed
+        ? '后端已确认删除成功，但列表未能更新。'
+        : missing
+          ? '这条任务已不存在，本次没有再次删除。'
+          : '本次删除结果未确认。'
+      setResult((previous) => ({
+        ...previous,
+        state: 'error',
+        message: `${outcome} 下方保留的是上次读取的列表。请恢复连接后重新读取核对，再继续操作。${errorMessage(error)}`,
+      }))
+    } finally {
+      setDeleting(null)
+      setPending(null)
+    }
+  }
+
   return (
     <section className="backend-connection" aria-labelledby="backend-tasks-title">
       <div className="connection-heading">
@@ -240,7 +294,7 @@ export default function BackendTasks() {
           type="button"
           className="connection-button"
           onClick={loadTasks}
-          disabled={Boolean(pending)}
+          disabled={Boolean(pending) || Boolean(deleting)}
         >
           {pending === 'read' ? '正在读取…' : '读取后端任务'}
         </button>
@@ -260,11 +314,11 @@ export default function BackendTasks() {
             }}
             placeholder="例如：学习 POST 请求"
             maxLength={200}
-            disabled={Boolean(pending) || Boolean(editing)}
+            disabled={Boolean(pending) || Boolean(editing) || Boolean(deleting)}
             aria-invalid={Boolean(formError)}
             aria-describedby={formError ? 'backend-task-error' : undefined}
           />
-          <button type="submit" disabled={Boolean(pending) || Boolean(editing)}>
+          <button type="submit" disabled={Boolean(pending) || Boolean(editing) || Boolean(deleting)}>
             {pending === 'create' ? '正在新增…' : '新增到后端'}
           </button>
         </div>
@@ -276,6 +330,24 @@ export default function BackendTasks() {
       >
         {result.message}
       </p>
+      {deleting && (
+        <section
+          className="backend-delete-confirm"
+          aria-labelledby="backend-delete-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') cancelDelete()
+          }}
+        >
+          <h3 id="backend-delete-title">确认删除后端任务</h3>
+          <p>删除“{deleting.title}”（{deleting.completed ? '已完成' : '未完成'}）？删除后无法在任务板中撤销。</p>
+          <div className="task-actions">
+            <button type="button" className="cancel-button" onClick={cancelDelete} disabled={Boolean(pending)} autoFocus>取消删除</button>
+            <button type="button" className="delete-button" onClick={confirmDelete} disabled={Boolean(pending)}>
+              {pending === `delete:${deleting.id}` ? '正在删除…' : '确认删除'}
+            </button>
+          </div>
+        </section>
+      )}
       {editing && (
         <form className="edit-form backend-edit-form" onSubmit={saveTitle}>
           <label htmlFor="backend-edit-title">修改后端任务名称</label>
@@ -317,7 +389,7 @@ export default function BackendTasks() {
                     type="checkbox"
                     checked={task.completed}
                     onChange={(event) => changeCompleted(task, event.target.checked)}
-                    disabled={Boolean(pending) || Boolean(editing) || result.state !== 'success'}
+                    disabled={Boolean(pending) || Boolean(editing) || Boolean(deleting) || result.state !== 'success'}
                     aria-label={`后端任务：${task.title}`}
                   />
                   <span className="task-title">{task.title}</span>
@@ -325,20 +397,29 @@ export default function BackendTasks() {
                 <span className="task-state">
                   {pending === `update:${task.id}` ? '正在保存…' : task.completed ? '已完成' : '未完成'}
                 </span>
-                <button
-                  type="button"
-                  className="edit-button"
-                  aria-label={`编辑后端任务“${task.title}”`}
-                  onClick={() => beginEdit(task)}
-                  disabled={Boolean(pending) || Boolean(editing) || result.state !== 'success'}
-                >编辑</button>
+                <div className="task-actions">
+                  <button
+                    type="button"
+                    className="edit-button"
+                    aria-label={`编辑后端任务“${task.title}”`}
+                    onClick={() => beginEdit(task)}
+                    disabled={Boolean(pending) || Boolean(editing) || Boolean(deleting) || result.state !== 'success'}
+                  >编辑</button>
+                  <button
+                    type="button"
+                    className="delete-button"
+                    aria-label={`删除后端任务“${task.title}”`}
+                    onClick={() => beginDelete(task)}
+                    disabled={Boolean(pending) || Boolean(editing) || Boolean(deleting) || result.state !== 'success'}
+                  >删除</button>
+                </div>
               </li>
             ))}
           </ul>
         )
       )}
       <p className="connection-note">
-        勾选可完成或取消完成，点击编辑可改名。新增和修改成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
+        勾选可完成或取消完成，点击编辑可改名，删除前需要确认。操作成功后自动读取列表；刷新页面后需点击读取。使用时请保持 PostgreSQL 运行。
       </p>
     </section>
   )

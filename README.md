@@ -37,10 +37,15 @@ npm run dev
 
 ```bash
 npm run db:init
+npm run db:migrate
 npm run server
 ```
 
 `db:init` 只创建缺少的表，不清空或填入示例数据。新环境的任务表起初为空；当前电脑接入前的记录已单独迁移。GET 使用 SELECT，POST 使用带参数的 INSERT；PATCH 按 ID 使用带参数的 UPDATE 保存完成状态。数据库请求失败返回 503，不回退到内存。`/api/health` 只检查后端进程，数据库停止时它仍可能返回 200。
+
+`db:migrate` 按编号执行 `server/migrations/` 下尚未应用的 SQL 文件，在同一个事务中记录到 `schema_migrations`；重复运行会跳过已完成的版本。新增结构变更应添加新的编号文件，不修改已执行的迁移。Git 保存迁移代码，数据库命令才实际应用结构变更。
+
+第 9 课增加 `users` 表和 `tasks.owner_id` 外键，已有任务保留且归属暂为 NULL。用户名采用 3–32 位小写字母、数字、下划线，并以字母开头；用户名不能重复。一个用户可以拥有多条任务；仍有关联任务的用户不能直接删除。这里只建立数据关系：尚未实现注册、登录与权限检查，任务 API 仍操作全部后端任务，新建任务暂不分配用户。NULL 不表示公开任务。服务继续仅供本机学习。
 
 `PATCH /api/tasks/:id` 每次接受一个字段：`{ "completed": true }` / `{ "completed": false }` 修改完成状态，或 `{ "title": "新名称" }` 修改名称。后端会去除名称首尾空白，拒绝空名称、非文本、超过 200 个字符或包含空字符的名称；其他字段或一次传两个字段返回 400。成功返回 200 和修改后的任务，不存在的任务返回 404。
 
@@ -96,4 +101,6 @@ npm run preview -- --base=/task-board/
 
 [第 8 课：删除后端任务](docs/lessons/08-delete-backend-tasks.md)。通过确认与取消、同名任务隔离、SQL 核对及失败恢复，补齐任务的增删改查。
 
-本地开发页面通过 Vite 转发请求到后端，下方任务现已连接 PostgreSQL。前面课程文档保留各阶段的实验背景，当前行为以第 8 课为准。学习面板只在开发模式显示；GitHub Pages 仍只发布浏览器本地任务板，不运行这个 Node.js 后端或 PostgreSQL。
+[第 9 课：用户与任务的数据关系](docs/lessons/09-task-ownership.md)。理解主键、外键与一对多关系，练习 JOIN、迁移和回滚，区分数据归属与访问权限。
+
+本地开发页面通过 Vite 转发请求到后端，下方任务现已连接 PostgreSQL。前面课程文档保留各阶段的实验背景，当前页面与 API 行为以第 8 课为准，数据库结构以第 9 课为准。学习面板只在开发模式显示；GitHub Pages 仍只发布浏览器本地任务板，不运行这个 Node.js 后端或 PostgreSQL。

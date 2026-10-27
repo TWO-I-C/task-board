@@ -7,6 +7,7 @@
     "dev": "vite",
     "server": "node --watch server/index.js",
     "db:init": "node server/init-db.js",
+    "db:migrate": "node server/migrate-db.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { deleteTask, insertTask, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
+import { deleteTask, insertTask, insertUser, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
+import { hashPassword } from './passwords.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -25,6 +26,24 @@ function validatedTitle(value) {
   if (title.length > 200) throw requestError(400, '任务名称不能超过 200 个字符。')
   if (title.includes('\u0000')) throw requestError(400, '任务名称不能包含空字符。')
   return title
+}
+
+function validatedRegistration(data) {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)
+    || Object.keys(data).length !== 2 || !Object.hasOwn(data, 'username') || !Object.hasOwn(data, 'password')) {
+    throw requestError(400, '注册只接受 username 和 password 两个字段。')
+  }
+  const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : ''
+  if (!/^[a-z][a-z0-9_]{2,31}$/.test(username)) {
+    throw requestError(400, '用户名需为 3–32 位小写字母、数字或下划线，并以字母开头。')
+  }
+  const { password } = data
+  if (typeof password !== 'string' || !password.isWellFormed() || password.includes('\u0000')
+    || !password.trim() || [...password].length < 15 || [...password].length > 128) {
+    throw requestError(400, '密码需为 15–128 个字符，不能全为空白或包含无效字符。')
+  }
+  // 密码保留原样，不 trim、不转小写、不截断。
+  return { username, password }
 }
 
 function readJson(request) {
@@ -59,15 +78,31 @@ const server = createServer(async (request, response) => {
     const pathname = request.url.split('?')[0]
     const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/)
 
-    if (pathname !== '/api/health' && pathname !== '/api/tasks' && !taskMatch) {
+    if (pathname !== '/api/health' && pathname !== '/api/tasks' && pathname !== '/api/register' && !taskMatch) {
       sendJson(response, 404, { error: '接口不存在' })
       return
     }
 
-    const allowedMethods = taskMatch ? ['PATCH', 'DELETE'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
+    const allowedMethods = pathname === '/api/register' ? ['POST']
+      : taskMatch ? ['PATCH', 'DELETE'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
     if (!allowedMethods.includes(request.method)) {
       response.setHeader('Allow', allowedMethods.join(', '))
       sendJson(response, 405, { error: `这个接口只支持 ${allowedMethods.join('、')} 请求` })
+      return
+    }
+
+    if (pathname === '/api/register') {
+      const contentType = request.headers['content-type']?.split(';')[0].trim().toLowerCase()
+      if (contentType !== 'application/json') {
+        request.resume()
+        throw requestError(415, '请使用 application/json 发送注册信息。')
+      }
+      const { username, password } = validatedRegistration(await readJson(request))
+      const passwordHash = await hashPassword(password)
+      const user = await insertUser(randomUUID(), username, passwordHash)
+      if (!user) throw requestError(409, '用户名已被使用，请换一个用户名。')
+      // 只返回公开字段；不返回密码/哈希，也不创建登录 Cookie 或令牌。
+      sendJson(response, 201, { user })
       return
     }
 

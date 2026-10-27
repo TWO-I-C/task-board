@@ -74,3 +74,14 @@ export async function deleteTask(id) {
   )
   return result.rows[0] ?? null
 }
+
+export async function insertUser(id, username, passwordHash) {
+  // 用数据库唯一约束处理重名，包括两个请求同时注册的情况；不覆盖已有密码。
+  const result = await query(
+    `INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)
+     ON CONFLICT (username) DO NOTHING
+     RETURNING id, username, created_at`,
+    [id, username, passwordHash],
+  )
+  return result.rows[0] ?? null
+}

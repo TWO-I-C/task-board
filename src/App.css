@@ -86,6 +86,11 @@ h2 { margin: 0; font-size: 18px; }
 .backend-delete-confirm { margin-top: 16px; padding: 16px; border: 1px solid #e5c9c5; border-radius: 10px; background: #fff8f6; overflow-wrap: anywhere; }
 .backend-delete-confirm h3 { margin: 0 0 8px; font-size: 16px; }
 .backend-delete-confirm .task-actions { margin-top: 12px; flex-wrap: wrap; }
+.registration-form { display: grid; gap: 10px; margin-top: 22px; }
+.registration-form label { margin-top: 8px; font-size: 14px; font-weight: 600; }
+.registration-form input { width: 100%; min-width: 0; box-sizing: border-box; padding: 12px 14px; border: 1px solid #bbc7bf; border-radius: 8px; background: white; color: #21342a; }
+.registration-form .connection-note { margin: 0 0 6px; }
+.registration-form button { justify-self: start; margin-top: 8px; }
 @media (max-width: 520px) {
   .task-board { margin: 36px auto; }
   .input-row { flex-direction: column; }

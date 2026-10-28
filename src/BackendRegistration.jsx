@@ -49,7 +49,7 @@ export default function BackendRegistration() {
         || Number.isNaN(Date.parse(data.user.created_at))) {
         throw new Error('响应内容不完整。')
       }
-      setResult({ state: 'success', message: '注册成功，用户已保存。目前尚未登录。', user: data.user })
+      setResult({ state: 'success', message: '注册成功，用户已保存。注册不会自动登录或切换当前用户。', user: data.user })
     } catch (error) {
       let message = error.message
       if (confirmed) message = '后端已确认注册成功，但响应未能完整显示。请按用户名核对数据库。'
@@ -67,7 +67,7 @@ export default function BackendRegistration() {
   return (
     <section className="backend-connection" aria-labelledby="registration-title">
       <h2 id="registration-title">本地学习实验：用户注册</h2>
-      <p className="connection-note">使用专门的练习密码。注册后暂不分配任务，下一课再学习登录。</p>
+      <p className="connection-note">使用专门的练习密码。注册后可在下方登录，当前暂不分配任务。</p>
       <form className="registration-form" onSubmit={register} noValidate>
         <label htmlFor="register-username">用户名</label>
         <input id="register-username" name="username" autoComplete="username" autoCapitalize="none"

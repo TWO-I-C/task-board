@@ -1,7 +1,8 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { deleteTask, insertTask, insertUser, listTasks, pool, setTaskCompleted, setTaskTitle } from './database.js'
-import { hashPassword } from './passwords.js'
+import { createSession, deleteTask, findSession, insertTask, insertUser, listTasks, pool, removeSession, setTaskCompleted, setTaskTitle, userForLogin } from './database.js'
+import { hashPassword, verifyPassword } from './passwords.js'
+import { checkLoginRate, newSessionToken, requestSessionHash, requireSessionAction, sessionCookie, sessionHash } from './sessions.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -73,21 +74,81 @@ function readJson(request) {
   })
 }
 
+async function readSessionBody(request) {
+  const contentType = request.headers['content-type']?.split(';')[0].trim().toLowerCase()
+  if (contentType !== 'application/json') {
+    request.resume()
+    throw requestError(415, '请使用 application/json 发送登录或退出请求。')
+  }
+  return readJson(request)
+}
+
+function publicUser(user) {
+  return { id: user.id, username: user.username, created_at: user.created_at }
+}
+
 const server = createServer(async (request, response) => {
   try {
     const pathname = request.url.split('?')[0]
     const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/)
+    const sessionAction = pathname === '/api/login' || pathname === '/api/logout'
 
-    if (pathname !== '/api/health' && pathname !== '/api/tasks' && pathname !== '/api/register' && !taskMatch) {
+    if (!['/api/health', '/api/tasks', '/api/register', '/api/me'].includes(pathname) && !sessionAction && !taskMatch) {
       sendJson(response, 404, { error: '接口不存在' })
       return
     }
 
-    const allowedMethods = pathname === '/api/register' ? ['POST']
+    const allowedMethods = pathname === '/api/register' || sessionAction ? ['POST']
       : taskMatch ? ['PATCH', 'DELETE'] : pathname === '/api/tasks' ? ['GET', 'POST'] : ['GET']
     if (!allowedMethods.includes(request.method)) {
       response.setHeader('Allow', allowedMethods.join(', '))
       sendJson(response, 405, { error: `这个接口只支持 ${allowedMethods.join('、')} 请求` })
+      return
+    }
+
+    if (pathname === '/api/me') {
+      const tokenHash = requestSessionHash(request)
+      const session = tokenHash ? await findSession(tokenHash) : null
+      if (!session) {
+        response.setHeader('Set-Cookie', sessionCookie())
+        throw requestError(401, '当前未登录，或登录状态已失效。')
+      }
+      sendJson(response, 200, { user: publicUser(session), expiresAt: session.expires_at })
+      return
+    }
+
+    if (sessionAction) {
+      requireSessionAction(request)
+      if (pathname === '/api/login') checkLoginRate(request, response)
+      const data = await readSessionBody(request)
+      if (pathname === '/api/logout') {
+        if (data === null || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length) {
+          throw requestError(400, '退出请求的正文应为一个空对象。')
+        }
+        const tokenHash = requestSessionHash(request)
+        if (tokenHash) await removeSession(tokenHash)
+        // 数据库删除成功后才清 Cookie；失败不伪装为已退出。
+        response.setHeader('Set-Cookie', sessionCookie())
+        sendJson(response, 200, { user: null })
+        return
+      }
+      if (data === null || typeof data !== 'object' || Array.isArray(data)
+        || Object.keys(data).length !== 2 || typeof data.username !== 'string' || typeof data.password !== 'string') {
+        throw requestError(400, '登录只接受文本 username 和 password。')
+      }
+      const username = data.username.trim().toLowerCase()
+      const { password } = data
+      if (!/^[a-z][a-z0-9_]{2,31}$/.test(username) || !password.isWellFormed()
+        || password.includes('\u0000') || [...password].length < 1 || [...password].length > 128) {
+        throw requestError(400, '请检查用户名格式和密码长度。')
+      }
+      const user = await userForLogin(username)
+      const matches = await verifyPassword(password, user?.password_hash)
+      if (!matches || !user) throw requestError(401, '用户名或密码不正确。')
+      const token = newSessionToken()
+      const expiresAt = await createSession(user.id, sessionHash(token), requestSessionHash(request))
+      response.setHeader('Set-Cookie', sessionCookie(token))
+      sendJson(response, 200, { user: publicUser(user), expiresAt })
       return
     }
 

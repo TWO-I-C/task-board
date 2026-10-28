@@ -30,7 +30,7 @@ async function query(text, values) {
   try {
     return await pool.query(text, values)
   } catch {
-    throw Object.assign(new Error('数据库暂时无法完成请求，请确认 PostgreSQL 正在运行且任务表已初始化。'), {
+    throw Object.assign(new Error('数据库暂时无法完成请求，请确认 PostgreSQL 正在运行，且数据库初始化和迁移已完成。'), {
       statusCode: 503,
     })
   }
@@ -84,4 +84,36 @@ export async function insertUser(id, username, passwordHash) {
     [id, username, passwordHash],
   )
   return result.rows[0] ?? null
+}
+
+export async function userForLogin(username) {
+  const result = await query('SELECT id, username, created_at, password_hash FROM users WHERE username = $1', [username])
+  return result.rows[0] ?? null
+}
+
+export async function createSession(userId, tokenHash, previousHash) {
+  // 同一 SQL 事务中轮换当前浏览器的会话，清理过期记录；不退出其他有效设备会话。
+  const result = await query(
+    `WITH revoked AS (
+       DELETE FROM sessions WHERE token_hash = $3 OR expires_at <= CURRENT_TIMESTAMP
+     )
+     INSERT INTO sessions (token_hash, user_id, expires_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '1 hour') RETURNING expires_at`,
+    [tokenHash, userId, previousHash],
+  )
+  return result.rows[0].expires_at
+}
+
+export async function findSession(tokenHash) {
+  const result = await query(
+    `SELECT users.id, users.username, users.created_at, sessions.expires_at
+     FROM sessions JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = $1 AND sessions.expires_at > CURRENT_TIMESTAMP`,
+    [tokenHash],
+  )
+  return result.rows[0] ?? null
+}
+
+export async function removeSession(tokenHash) {
+  await query('DELETE FROM sessions WHERE token_hash = $1', [tokenHash])
 }

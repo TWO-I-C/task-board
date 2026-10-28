@@ -2,6 +2,7 @@ import { useState } from 'react'
 import BackendConnection from './BackendConnection.jsx'
 import BackendTasks from './BackendTasks.jsx'
 import BackendRegistration from './BackendRegistration.jsx'
+import BackendSession from './BackendSession.jsx'
 import './App.css'
 
 const STORAGE_KEY = 'task-board.tasks.v1'
@@ -244,6 +245,7 @@ function App() {
       {import.meta.env.DEV && <BackendConnection />}
       {import.meta.env.DEV && <BackendTasks />}
       {import.meta.env.DEV && <BackendRegistration />}
+      {import.meta.env.DEV && <BackendSession />}
     </main>
   )
 }

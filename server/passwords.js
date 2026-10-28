@@ -1,4 +1,4 @@
-import { randomBytes, scrypt } from 'node:crypto'
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
 const deriveKey = promisify(scrypt)
@@ -6,17 +6,32 @@ const deriveKey = promisify(scrypt)
 const options = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }
 let activeHashes = 0
 
-export async function hashPassword(password) {
-  // 限制同时计算的数量，避免连续请求无限占用内存；这不是完整的注册限流策略。
+async function derivePassword(password, salt) {
+  // 注册与登录共享计算上限，避免连续请求无限占用内存。
   if (activeHashes >= 2) {
-    throw Object.assign(new Error('注册暂忙，请稍后重试。'), { statusCode: 503 })
+    throw Object.assign(new Error('密码处理暂忙，请稍后重试。'), { statusCode: 503 })
   }
   activeHashes += 1
   try {
-    const salt = randomBytes(16)
-    const key = await deriveKey(password, salt, 64, options)
-    return `scrypt$${options.N}$${options.r}$${options.p}$${salt.toString('hex')}$${key.toString('hex')}`
+    return await deriveKey(password, salt, 64, options)
   } finally {
     activeHashes -= 1
   }
+}
+
+export async function hashPassword(password) {
+  const salt = randomBytes(16)
+  const key = await derivePassword(password, salt)
+  return `scrypt$${options.N}$${options.r}$${options.p}$${salt.toString('hex')}$${key.toString('hex')}`
+}
+
+export async function verifyPassword(password, stored) {
+  // 只接受当前支持的参数，避免损坏的存储记录要求无界计算。
+  const match = typeof stored === 'string'
+    ? /^scrypt\$131072\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/.exec(stored) : null
+  // 用户不存在、没有密码或记录损坏时也做一次等成本计算，减少明显的响应时间差。
+  const salt = match ? Buffer.from(match[1], 'hex') : Buffer.alloc(16)
+  const expected = match ? Buffer.from(match[2], 'hex') : Buffer.alloc(64)
+  const actual = await derivePassword(password, salt)
+  return timingSafeEqual(actual, expected) && Boolean(match)
 }

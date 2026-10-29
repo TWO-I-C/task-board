@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import BackendTasks from './BackendTasks.jsx'
 
 async function currentSession(signal = AbortSignal.timeout(5000)) {
   const response = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store', signal })
@@ -24,6 +25,26 @@ export default function BackendSession() {
   const [pending, setPending] = useState('read')
   const [result, setResult] = useState({ state: 'checking', user: null, message: '正在向后端确认登录状态…' })
   const submitting = useRef(false)
+  const channel = useRef(null)
+  const needsRecheck = useRef(false)
+  const [readVersion, setReadVersion] = useState(0)
+  const refreshIdentity = useCallback(() => {
+    setResult({ state: 'checking', user: null, message: '正在向后端确认登录状态…' })
+    setPending('read')
+    setReadVersion(version => version + 1)
+  }, [])
+
+  useEffect(() => {
+    if (!('BroadcastChannel' in window)) return
+    const connection = new BroadcastChannel('task-board-session-changed')
+    channel.current = connection
+    connection.onmessage = () => {
+      // 通知只用于重新向后端确认，消息本身不提供可信用户身份。
+      if (submitting.current) needsRecheck.current = true
+      else refreshIdentity()
+    }
+    return () => { connection.close(); channel.current = null }
+  }, [refreshIdentity])
 
   useEffect(() => {
     let active = true
@@ -34,16 +55,22 @@ export default function BackendSession() {
       .catch(() => { if (active) setResult({ state: 'error', user: null, message: '暂时无法确认登录状态，请检查后端与数据库后重新确认。' }) })
       .finally(() => { if (active) setPending('') })
     return () => { active = false; controller.abort() }
-  }, [])
+  }, [readVersion])
 
-  async function checkSession() {
+  function checkSession() {
     if (pending || submitting.current) return
-    submitting.current = true
-    setPending('read')
-    setResult({ state: 'checking', user: null, message: '正在向后端确认登录状态…' })
-    try { setResult(confirmedState(await currentSession())) }
-    catch { setResult({ state: 'error', user: null, message: '暂时无法确认登录状态，请检查后端与数据库后重新确认。' }) }
-    finally { setPending(''); submitting.current = false }
+    refreshIdentity()
+  }
+
+  function finishSessionAction() {
+    setPassword('')
+    setPending('')
+    submitting.current = false
+    channel.current?.postMessage('changed')
+    if (needsRecheck.current) {
+      needsRecheck.current = false
+      refreshIdentity()
+    }
   }
 
   async function login(event) {
@@ -82,7 +109,7 @@ export default function BackendSession() {
         ? '后端已确认登录，但暂时无法读取当前身份。请点击重新确认登录状态。'
         : error.name === 'TimeoutError' || error instanceof TypeError
           ? '连接失败或超时，登录结果未确认。恢复后请重新确认登录状态。' : error.message })
-    } finally { setPassword(''); setPending(''); submitting.current = false }
+    } finally { finishSessionAction() }
   }
 
   async function logout() {
@@ -101,12 +128,12 @@ export default function BackendSession() {
         ? '当前仍有有效会话，可能由另一标签页重新登录。请再次确认。' : '已退出登录，当前会话已失效。'))
     } catch {
       setResult({ state: 'error', user: null, message: '退出结果未确认，请恢复连接后重新确认登录状态；不能只凭页面变化认定已退出。' })
-    } finally { setPassword(''); setPending(''); submitting.current = false }
+    } finally { finishSessionAction() }
   }
 
   const hasError = result.state === 'error' || result.error
   return (
-    <section className="backend-connection" aria-labelledby="session-title">
+    <><section className="backend-connection" aria-labelledby="session-title">
       <div className="connection-heading">
         <h2 id="session-title">本地学习实验：登录与会话</h2>
         <button className="connection-button" type="button" disabled={Boolean(pending)} onClick={checkSession}>
@@ -131,8 +158,16 @@ export default function BackendSession() {
       </form>}
       {(result.user || result.state === 'error') && <button className="connection-button session-logout" type="button"
         disabled={Boolean(pending)} onClick={logout}>{pending === 'logout' ? '正在退出…' : '退出当前登录'}</button>}
-      <p className="connection-note">刷新页面会重新向后端确认身份。其他标签页登录或退出后，可点击上方按钮重新确认。</p>
-      <p className="connection-note">本课会话有效期为 1 小时。任务权限检查将在下一课接入，当前任务列表仍未按用户隔离。</p>
+      <p className="connection-note">同一浏览器的普通标签页共享登录状态。切换账号或退出后会通知其他任务板标签页重新确认；也可手动点击上方按钮。</p>
+      <p className="connection-note">会话有效期为 1 小时。下方后端任务只允许当前用户访问，退出或重新确认身份时会清除列表与未提交的输入。</p>
     </section>
+    {result.state === 'authenticated' && result.user && !pending
+      ? <BackendTasks key={result.user.id} user={result.user} onIdentityChanged={refreshIdentity} />
+      : <section className="backend-connection" aria-labelledby="backend-tasks-title">
+          <h2 id="backend-tasks-title">本地学习实验：后端任务</h2>
+          <p className="connection-note">{pending || result.state === 'error'
+            ? '身份尚未确认，暂不展示后端任务。' : '请先登录，再读取和管理属于自己的后端任务。'}</p>
+        </section>}
+    </>
   )
 }

@@ -36,41 +36,41 @@ async function query(text, values) {
   }
 }
 
-export async function listTasks() {
-  const result = await query('SELECT id, title, completed FROM tasks ORDER BY created_at, id')
+export async function listTasks(ownerId) {
+  const result = await query('SELECT id, title, completed FROM tasks WHERE owner_id = $1 ORDER BY created_at, id', [ownerId])
   return result.rows
 }
 
-export async function insertTask(id, title) {
-  // $1、$2 是参数占位符，用户输入不拼接进 SQL 语句。
+export async function insertTask(id, title, ownerId) {
+  // $1、$2、$3 是参数占位符；ownerId 来自已验证的会话。
   const result = await query(
-    'INSERT INTO tasks (id, title) VALUES ($1, $2) RETURNING id, title, completed',
-    [id, title],
+    'INSERT INTO tasks (id, title, owner_id) VALUES ($1, $2, $3) RETURNING id, title, completed',
+    [id, title, ownerId],
   )
   return result.rows[0]
 }
 
-export async function setTaskCompleted(id, completed) {
+export async function setTaskCompleted(id, completed, ownerId) {
   // 按 ID 更新一条任务，明确设置目标值；重复提交 true 不会把状态翻回 false。
   const result = await query(
-    'UPDATE tasks SET completed = $1 WHERE id = $2 RETURNING id, title, completed',
-    [completed, id],
+    'UPDATE tasks SET completed = $1 WHERE id = $2 AND owner_id = $3 RETURNING id, title, completed',
+    [completed, id, ownerId],
   )
   return result.rows[0] ?? null
 }
 
-export async function setTaskTitle(id, title) {
+export async function setTaskTitle(id, title, ownerId) {
   const result = await query(
-    'UPDATE tasks SET title = $1 WHERE id = $2 RETURNING id, title, completed',
-    [title, id],
+    'UPDATE tasks SET title = $1 WHERE id = $2 AND owner_id = $3 RETURNING id, title, completed',
+    [title, id, ownerId],
   )
   return result.rows[0] ?? null
 }
 
-export async function deleteTask(id) {
+export async function deleteTask(id, ownerId) {
   const result = await query(
-    'DELETE FROM tasks WHERE id = $1 RETURNING id, title, completed',
-    [id],
+    'DELETE FROM tasks WHERE id = $1 AND owner_id = $2 RETURNING id, title, completed',
+    [id, ownerId],
   )
   return result.rows[0] ?? null
 }

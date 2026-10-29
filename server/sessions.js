@@ -26,7 +26,7 @@ export function sessionCookie(token = '') {
   return `${cookieName}=${token}; Path=/api; HttpOnly; SameSite=Lax; Max-Age=${token ? 3600 : 0}${cookieSecure ? '; Secure' : ''}`
 }
 
-export function requireSessionAction(request) {
+export function requireTrustedMutation(request) {
   // 自定义请求头触发跨源预检；不开放 CORS。Origin 白名单再检查浏览器请求来源。
   if (request.headers['x-task-board-request'] !== '1'
     || request.headers['sec-fetch-site'] === 'cross-site'

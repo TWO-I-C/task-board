@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createSession, deleteTask, findSession, insertTask, insertUser, listTasks, pool, removeSession, setTaskCompleted, setTaskTitle, userForLogin } from './database.js'
 import { hashPassword, verifyPassword } from './passwords.js'
-import { checkLoginRate, newSessionToken, requestSessionHash, requireSessionAction, sessionCookie, sessionHash } from './sessions.js'
+import { checkLoginRate, newSessionToken, requestSessionHash, requireTrustedMutation, sessionCookie, sessionHash } from './sessions.js'
 
 const host = '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
@@ -87,6 +87,17 @@ function publicUser(user) {
   return { id: user.id, username: user.username, created_at: user.created_at }
 }
 
+async function requireUser(request, response) {
+  const tokenHash = requestSessionHash(request)
+  const session = tokenHash ? await findSession(tokenHash) : null
+  if (!session) {
+    request.resume()
+    response.setHeader('Set-Cookie', sessionCookie())
+    throw requestError(401, '当前未登录，或登录状态已失效。')
+  }
+  return session
+}
+
 const server = createServer(async (request, response) => {
   try {
     const pathname = request.url.split('?')[0]
@@ -107,18 +118,13 @@ const server = createServer(async (request, response) => {
     }
 
     if (pathname === '/api/me') {
-      const tokenHash = requestSessionHash(request)
-      const session = tokenHash ? await findSession(tokenHash) : null
-      if (!session) {
-        response.setHeader('Set-Cookie', sessionCookie())
-        throw requestError(401, '当前未登录，或登录状态已失效。')
-      }
+      const session = await requireUser(request, response)
       sendJson(response, 200, { user: publicUser(session), expiresAt: session.expires_at })
       return
     }
 
     if (sessionAction) {
-      requireSessionAction(request)
+      requireTrustedMutation(request)
       if (pathname === '/api/login') checkLoginRate(request, response)
       const data = await readSessionBody(request)
       if (pathname === '/api/logout') {
@@ -167,6 +173,18 @@ const server = createServer(async (request, response) => {
       return
     }
 
+    let currentUser
+    if (pathname === '/api/tasks' || taskMatch) {
+      currentUser = await requireUser(request, response)
+      // 页面提供的 ID 只用于发现旧页面与实际会话不一致，绝不作为身份来源。
+      const expectedUser = request.headers['x-task-board-user']
+      if (expectedUser !== undefined && expectedUser !== currentUser.id) {
+        request.resume()
+        throw requestError(409, '登录用户已变化，请重新确认登录状态后再操作。')
+      }
+      if (request.method !== 'GET') requireTrustedMutation(request)
+    }
+
     if (taskMatch) {
       let id
       try {
@@ -178,10 +196,10 @@ const server = createServer(async (request, response) => {
         throw requestError(400, '任务 ID 无效。')
       }
       if (request.method === 'DELETE') {
-        // 删除对象只由 URL 中的 ID 决定，不读取请求正文里的其他任务信息。
+        // URL 指定目标；已验证的会话决定谁有权删除。正文不能改变归属。
         request.resume()
-        const task = await deleteTask(id)
-        if (!task) throw requestError(404, '任务已不存在，请重新读取后端任务。')
+        const task = await deleteTask(id, currentUser.id)
+        if (!task) throw requestError(404, '任务不存在或无权访问，请重新读取后端任务。')
         sendJson(response, 200, { task })
         return
       }
@@ -198,14 +216,14 @@ const server = createServer(async (request, response) => {
       }
       let task
       if (Object.hasOwn(data, 'title')) {
-        task = await setTaskTitle(id, validatedTitle(data.title))
+        task = await setTaskTitle(id, validatedTitle(data.title), currentUser.id)
       } else {
         if (typeof data.completed !== 'boolean') {
           throw requestError(400, 'completed 必须是 true 或 false。')
         }
-        task = await setTaskCompleted(id, data.completed)
+        task = await setTaskCompleted(id, data.completed, currentUser.id)
       }
-      if (!task) throw requestError(404, '任务不存在，请重新读取后端任务。')
+      if (!task) throw requestError(404, '任务不存在或无权访问，请重新读取后端任务。')
       sendJson(response, 200, { task })
       return
     }
@@ -218,20 +236,21 @@ const server = createServer(async (request, response) => {
       }
 
       const data = await readJson(request)
-      if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-        throw requestError(400, '任务名称不能为空，且必须是文本。')
+      if (data === null || typeof data !== 'object' || Array.isArray(data)
+        || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'title')) {
+        throw requestError(400, '新增任务只接受 title，归属与初始状态由后端决定。')
       }
       const title = validatedTitle(data.title)
 
       // 身份和初始完成状态由后端决定，不采用客户端传来的值。
       // 等数据库确认写入后，才返回创建成功。
-      const task = await insertTask(randomUUID(), title)
+      const task = await insertTask(randomUUID(), title, currentUser.id)
       sendJson(response, 201, { task })
       return
     }
 
     if (pathname === '/api/tasks') {
-      const tasks = await listTasks()
+      const tasks = await listTasks(currentUser.id)
       sendJson(response, 200, { tasks })
       return
     }

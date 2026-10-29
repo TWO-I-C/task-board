@@ -10,7 +10,8 @@
     "db:migrate": "node server/migrate-db.js",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:permissions": "node tests/task-permissions.mjs"
   },
   "dependencies": {
     "pg": "^8.23.1",

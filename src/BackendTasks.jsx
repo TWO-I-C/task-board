@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function isTask(task) {
   return task !== null && typeof task === 'object'
@@ -7,11 +7,8 @@ function isTask(task) {
     && typeof task.completed === 'boolean'
 }
 
-async function fetchTasks() {
-  const response = await fetch('/api/tasks', {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(5000),
-  })
+async function fetchTasks(taskRequest) {
+  const response = await taskRequest('/api/tasks')
   if (!response.ok) {
     const data = await response.json().catch(() => null)
     throw new Error(`读取失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端后重试。'}`)
@@ -31,7 +28,30 @@ function errorMessage(error) {
   return error.message
 }
 
-export default function BackendTasks() {
+export default function BackendTasks({ user, onIdentityChanged }) {
+  const lifetime = useRef(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
+
+  async function taskRequest(path, options = {}) {
+    const controller = lifetime.current
+    const response = await fetch(path, {
+      ...options,
+      credentials: 'same-origin', cache: 'no-store',
+      headers: { ...options.headers, 'X-Task-Board-Request': '1', 'X-Task-Board-User': user.id },
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+    })
+    if (controller.signal.aborted) throw new DOMException('页面身份已变化', 'AbortError')
+    if ([401, 409].includes(response.status)) {
+      onIdentityChanged()
+      throw new Error('登录状态已失效或用户已变化，请重新确认身份。')
+    }
+    return response
+  }
+
   const [draft, setDraft] = useState('')
   const [formError, setFormError] = useState('')
   const [editing, setEditing] = useState(null)
@@ -55,7 +75,7 @@ export default function BackendTasks() {
     setPending('read')
     setResult({ state: 'loading', message: '正在读取后端任务…' })
     try {
-      const tasks = await fetchTasks()
+      const tasks = await fetchTasks(taskRequest)
       showTasks(tasks, '读取成功')
       if (editing) {
         const current = tasks.find((task) => task.id === editing.id)
@@ -63,7 +83,7 @@ export default function BackendTasks() {
           ...previous,
           originalTitle: current?.title ?? previous.originalTitle,
           needsReload: !current,
-          error: current ? '' : '这条任务已不存在，编辑文字已保留，请取消编辑。',
+          error: current ? '' : '这条任务不存在或无权访问，编辑文字已保留，请取消编辑。',
         }))
       }
     } catch (error) {
@@ -90,16 +110,15 @@ export default function BackendTasks() {
     let rejected = false
 
     try {
-      const response = await fetch('/api/tasks', {
+      const response = await taskRequest('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
-        signal: AbortSignal.timeout(5000),
       })
 
       if (response.status !== 201) {
         // 这些状态表示本接口在写入前拒绝了请求；其他失败可能无法确认写入结果。
-        rejected = [400, 413, 415].includes(response.status)
+        rejected = [400, 403, 413, 415].includes(response.status)
         const data = await response.json().catch(() => null)
         throw new Error(typeof data?.error === 'string'
           ? data.error
@@ -113,7 +132,7 @@ export default function BackendTasks() {
         throw new Error('新增响应的任务格式不符合预期。')
       }
       // 收到创建成功的响应后重新 GET，列表以这次从后端读取的数据为准。
-      showTasks(await fetchTasks(), '新增成功，已重新读取后端列表')
+      showTasks(await fetchTasks(taskRequest), '新增成功，已重新读取后端列表')
     } catch (error) {
       const outcome = created
         ? '后端已确认新增成功，但列表未能更新。请先读取后端任务，不要重复提交。'
@@ -134,14 +153,13 @@ export default function BackendTasks() {
     let rejected = false
 
     try {
-      const response = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+      const response = await taskRequest(`/api/tasks/${encodeURIComponent(task.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),
-        signal: AbortSignal.timeout(5000),
       })
       if (response.status !== 200) {
-        rejected = [400, 404, 413, 415].includes(response.status)
+        rejected = [400, 403, 404, 413, 415].includes(response.status)
         const data = await response.json().catch(() => null)
         throw new Error(`修改失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端。'}`)
       }
@@ -151,7 +169,7 @@ export default function BackendTasks() {
         throw new Error('修改响应的任务格式不符合预期。')
       }
       // 不提前更改勾选状态；保存确认后重新读取，展示数据库中的最新结果。
-      showTasks(await fetchTasks(), '状态保存成功，已重新读取后端列表')
+      showTasks(await fetchTasks(taskRequest), '状态保存成功，已重新读取后端列表')
     } catch (error) {
       const outcome = saved
         ? '后端已确认保存成功，但列表未能更新。'
@@ -199,14 +217,13 @@ export default function BackendTasks() {
     let saved = false
     let rejected = false
     try {
-      const response = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+      const response = await taskRequest(`/api/tasks/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
-        signal: AbortSignal.timeout(5000),
       })
       if (response.status !== 200) {
-        rejected = [400, 404, 413, 415].includes(response.status)
+        rejected = [400, 403, 404, 413, 415].includes(response.status)
         const data = await response.json().catch(() => null)
         throw new Error(`修改失败（HTTP ${response.status}）。${typeof data?.error === 'string' ? data.error : '请检查后端。'}`)
       }
@@ -215,7 +232,7 @@ export default function BackendTasks() {
       if (!isTask(data?.task) || data.task.id !== id || data.task.title !== title) {
         throw new Error('修改响应的任务格式不符合预期。')
       }
-      showTasks(await fetchTasks(), '名称保存成功，已重新读取后端列表')
+      showTasks(await fetchTasks(taskRequest), '名称保存成功，已重新读取后端列表')
       setEditing(null)
     } catch (error) {
       const outcome = saved
@@ -254,9 +271,8 @@ export default function BackendTasks() {
     let removed = false
     let missing = false
     try {
-      const response = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+      const response = await taskRequest(`/api/tasks/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        signal: AbortSignal.timeout(5000),
       })
       if (response.status !== 200) {
         missing = response.status === 404
@@ -268,12 +284,12 @@ export default function BackendTasks() {
       if (!isTask(data?.task) || data.task.id !== id) {
         throw new Error('删除响应的任务格式不符合预期。')
       }
-      showTasks(await fetchTasks(), '删除成功，已重新读取后端列表')
+      showTasks(await fetchTasks(taskRequest), '删除成功，已重新读取后端列表')
     } catch (error) {
       const outcome = removed
         ? '后端已确认删除成功，但列表未能更新。'
         : missing
-          ? '这条任务已不存在，本次没有再次删除。'
+          ? '这条任务不存在或无权访问，本次没有删除。'
           : '本次删除结果未确认。'
       setResult((previous) => ({
         ...previous,
@@ -300,7 +316,7 @@ export default function BackendTasks() {
         </button>
       </div>
       <p className="connection-note">
-        这里的任务通过后端保存到 PostgreSQL，独立于上方“我的任务”。重启后端后仍会保留。
+        当前用户：{user.username}。这里只读取和操作你的数据库任务，独立于上方浏览器本地任务。
       </p>
       <form className="task-form backend-task-form" onSubmit={addTask}>
         <label htmlFor="backend-task-title">后端任务名称</label>
@@ -379,7 +395,7 @@ export default function BackendTasks() {
       )}
       {result.tasks && (
         result.tasks.length === 0 ? (
-          <p className="connection-note">后端任务列表为空。</p>
+          <p className="connection-note">你还没有后端任务。旧的未分配任务仍保留在数据库中，不会自动归到当前账号。</p>
         ) : (
           <ul className="backend-task-list" aria-label="后端任务列表">
             {result.tasks.map((task) => (

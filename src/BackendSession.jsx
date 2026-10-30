@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import BackendTasks from './BackendTasks.jsx'
+import BackendRegistration from './BackendRegistration.jsx'
 
 async function currentSession(signal = AbortSignal.timeout(5000)) {
   const response = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store', signal })
@@ -16,11 +17,12 @@ async function currentSession(signal = AbortSignal.timeout(5000)) {
 
 function confirmedState(session, message) {
   return { ...session, state: session.user ? 'authenticated' : 'anonymous',
-    message: message ?? (session.user ? '已向后端确认当前登录用户。' : '当前未登录，或会话已失效。') }
+    message: message ?? (session.user ? '登录状态已确认。' : '当前未登录，或会话已失效。') }
 }
 
 export default function BackendSession() {
   const [username, setUsername] = useState('')
+  const [authView, setAuthView] = useState('login')
   const [password, setPassword] = useState('')
   const [pending, setPending] = useState('read')
   const [result, setResult] = useState({ state: 'checking', user: null, message: '正在向后端确认登录状态…' })
@@ -29,6 +31,8 @@ export default function BackendSession() {
   const needsRecheck = useRef(false)
   const [readVersion, setReadVersion] = useState(0)
   const refreshIdentity = useCallback(() => {
+    setAuthView('login')
+    setPassword('')
     setResult({ state: 'checking', user: null, message: '正在向后端确认登录状态…' })
     setPending('read')
     setReadVersion(version => version + 1)
@@ -52,7 +56,7 @@ export default function BackendSession() {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
     currentSession(signal)
       .then(session => { if (active) setResult(confirmedState(session)) })
-      .catch(() => { if (active) setResult({ state: 'error', user: null, message: '暂时无法确认登录状态，请检查后端与数据库后重新确认。' }) })
+      .catch(() => { if (active) setResult({ state: 'error', user: null, message: '暂时无法连接账户服务。请恢复服务后点击“重试连接”。' }) })
       .finally(() => { if (active) setPending('') })
     return () => { active = false; controller.abort() }
   }, [readVersion])
@@ -103,10 +107,10 @@ export default function BackendSession() {
       accepted = true
       const session = await currentSession()
       if (!session.user || session.user.username !== normalized) throw new Error('当前身份尚未确认。')
-      setResult(confirmedState(session, '登录成功，后端已通过会话确认你的身份。'))
+      setResult(confirmedState(session, '登录成功。'))
     } catch (error) {
       setResult({ state: 'error', user: null, message: accepted
-        ? '后端已确认登录，但暂时无法读取当前身份。请点击重新确认登录状态。'
+        ? '登录已成功，但暂时无法读取当前身份。请点击“重试连接”。'
         : error.name === 'TimeoutError' || error instanceof TypeError
           ? '连接失败或超时，登录结果未确认。恢复后请重新确认登录状态。' : error.message })
     } finally { finishSessionAction() }
@@ -131,43 +135,50 @@ export default function BackendSession() {
     } finally { finishSessionAction() }
   }
 
+  function returnToLogin(name, message = '请输入密码登录。') {
+    setUsername(name.trim().toLowerCase())
+    setPassword('')
+    setAuthView('login')
+    setResult(confirmedState({ user: null }, message))
+  }
+
   const hasError = result.state === 'error' || result.error
+  const signedIn = result.state === 'authenticated' && result.user && !pending
   return (
-    <><section className="backend-connection" aria-labelledby="session-title">
-      <div className="connection-heading">
-        <h2 id="session-title">本地学习实验：登录与会话</h2>
-        <button className="connection-button" type="button" disabled={Boolean(pending)} onClick={checkSession}>
-          {pending === 'read' ? '正在确认…' : '重新确认登录状态'}
-        </button>
-      </div>
-      <p className={`connection-message is-${hasError ? 'error' : result.user ? 'success' : 'idle'}`}
-        role={hasError ? 'alert' : 'status'}>{result.message}</p>
-      {result.user && <dl className="connection-details">
-        <dt>当前用户</dt><dd>{result.user.username}</dd>
-        <dt>用户 ID</dt><dd>{result.user.id}</dd>
-        <dt>会话到期时间（UTC）</dt><dd><time dateTime={result.expiresAt}>{result.expiresAt}</time></dd>
-      </dl>}
-      {result.state === 'anonymous' && <form className="registration-form" onSubmit={login} noValidate>
-        <label htmlFor="login-username">登录用户名</label>
-        <input id="login-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
-          value={username} disabled={Boolean(pending)} onChange={event => setUsername(event.target.value)} />
-        <label htmlFor="login-password">登录密码</label>
-        <input id="login-password" name="password" type="password" autoComplete="current-password"
-          value={password} disabled={Boolean(pending)} onChange={event => setPassword(event.target.value)} />
-        <button className="save-button" type="submit" disabled={Boolean(pending)}>{pending === 'login' ? '正在登录…' : '登录练习账号'}</button>
-      </form>}
-      {(result.user || result.state === 'error') && <button className="connection-button session-logout" type="button"
-        disabled={Boolean(pending)} onClick={logout}>{pending === 'logout' ? '正在退出…' : '退出当前登录'}</button>}
-      <p className="connection-note">同一浏览器的普通标签页共享登录状态。切换账号或退出后会通知其他任务板标签页重新确认；也可手动点击上方按钮。</p>
-      <p className="connection-note">会话有效期为 1 小时。下方后端任务只允许当前用户访问，退出或重新确认身份时会清除列表与未提交的输入。</p>
-    </section>
-    {result.state === 'authenticated' && result.user && !pending
-      ? <BackendTasks key={result.user.id} user={result.user} onIdentityChanged={refreshIdentity} />
-      : <section className="backend-connection" aria-labelledby="backend-tasks-title">
-          <h2 id="backend-tasks-title">本地学习实验：后端任务</h2>
-          <p className="connection-note">{pending || result.state === 'error'
-            ? '身份尚未确认，暂不展示后端任务。' : '请先登录，再读取和管理属于自己的后端任务。'}</p>
-        </section>}
+    <>
+      <section className={`backend-connection account-session${signedIn ? ' is-signed-in' : ''}`} aria-labelledby="session-title">
+        <div className="connection-heading">
+          <div>
+            <p className="eyebrow">{signedIn ? '当前账号' : '欢迎回来'}</p>
+            <h2 id="session-title">{signedIn ? result.user.username : authView === 'register' ? '创建账号' : '登录你的任务板'}</h2>
+          </div>
+          {result.user && <button className="cancel-button" type="button" disabled={Boolean(pending)} onClick={logout}>
+            {pending === 'logout' ? '正在退出…' : '退出登录'}
+          </button>}
+        </div>
+        {(hasError || (!signedIn && authView === 'login')) &&
+          <p className={`connection-message is-${hasError ? 'error' : 'idle'}`} role={hasError ? 'alert' : 'status'}>{result.message}</p>}
+        {result.state === 'anonymous' && (authView === 'register'
+          ? <BackendRegistration onRegistered={name => returnToLogin(name, '注册成功，请输入密码登录。')} onCancel={name => returnToLogin(name)} />
+          : <form className="registration-form login-form" onSubmit={login} noValidate>
+              <label htmlFor="login-username">登录用户名</label>
+              <input id="login-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                value={username} disabled={Boolean(pending)} onChange={event => setUsername(event.target.value)} />
+              <label htmlFor="login-password">登录密码</label>
+              <input id="login-password" name="password" type="password" autoComplete="current-password"
+                value={password} disabled={Boolean(pending)} onChange={event => setPassword(event.target.value)} />
+              <div className="auth-actions">
+                <button className="save-button" type="submit" disabled={Boolean(pending)}>{pending === 'login' ? '正在登录…' : '登录'}</button>
+                <button className="cancel-button" type="button" disabled={Boolean(pending)} onClick={() => { setPassword(''); setAuthView('register') }}>创建账号</button>
+              </div>
+            </form>)}
+        {result.state === 'error' && <div className="auth-actions recovery-actions">
+          <button className="save-button" type="button" disabled={Boolean(pending)} onClick={checkSession}>重试连接</button>
+          <button className="cancel-button" type="button" disabled={Boolean(pending)} onClick={logout}>尝试退出登录</button>
+        </div>}
+        {signedIn && <p className="connection-note">任务保存在此账号中。切换账号后，会重新加载对应的任务。</p>}
+      </section>
+      {signedIn && <BackendTasks key={result.user.id} user={result.user} onIdentityChanged={refreshIdentity} />}
     </>
   )
 }

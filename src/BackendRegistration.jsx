@@ -1,16 +1,23 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-export default function BackendRegistration() {
+export default function BackendRegistration({ onRegistered, onCancel }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  const [result, setResult] = useState({ state: 'idle', message: '创建一个本地练习账号，体验注册流程。' })
+  const [result, setResult] = useState({ state: 'idle', message: '' })
   const submitting = useRef(false)
+  const lifetime = useRef(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
   const busy = result.state === 'loading'
 
   async function register(event) {
     event.preventDefault()
     if (submitting.current) return
+    const controller = lifetime.current
     const normalizedUsername = username.trim().toLowerCase()
     let validationError = ''
     if (!/^[a-z][a-z0-9_]{2,31}$/.test(normalizedUsername)) {
@@ -35,26 +42,28 @@ export default function BackendRegistration() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: normalizedUsername, password }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
       })
       if (response.status !== 201) {
         if (response.status === 409) throw new Error('用户名已被使用（HTTP 409），没有覆盖已有账号。请换一个用户名。')
         if (response.status === 400) throw new Error('注册信息未通过后端校验（HTTP 400），请检查用户名和密码。')
-        throw new Error(`注册未确认成功（HTTP ${response.status}）。恢复连接后先按用户名核对数据库，再决定是否重试。`)
+        throw new Error('注册结果暂未确认。恢复连接后，请先尝试登录这个账号，再决定是否重新注册。')
       }
       confirmed = true
       const data = await response.json()
+      if (controller.signal.aborted) return
       if (!data?.user || typeof data.user.id !== 'string' || !data.user.id
         || data.user.username !== normalizedUsername || typeof data.user.created_at !== 'string'
         || Number.isNaN(Date.parse(data.user.created_at))) {
         throw new Error('响应内容不完整。')
       }
-      setResult({ state: 'success', message: '注册成功，用户已保存。注册不会自动登录或切换当前用户。', user: data.user })
+      onRegistered(data.user.username)
     } catch (error) {
+      if (controller.signal.aborted) return
       let message = error.message
-      if (confirmed) message = '后端已确认注册成功，但响应未能完整显示。请按用户名核对数据库。'
+      if (confirmed) message = '账号已创建，但响应未能完整显示。请返回登录，尝试使用这个账号登录。'
       else if (error.name === 'TimeoutError' || error instanceof TypeError) {
-        message = '连接失败或等待超过 10 秒，注册结果未确认。恢复后先按用户名核对数据库，再决定是否重试。'
+        message = '连接失败或超时，注册结果未确认。恢复后请先尝试登录这个账号，再决定是否重新注册。'
       }
       setResult({ state: 'error', message })
     } finally {
@@ -65,9 +74,8 @@ export default function BackendRegistration() {
   }
 
   return (
-    <section className="backend-connection" aria-labelledby="registration-title">
-      <h2 id="registration-title">本地学习实验：用户注册</h2>
-      <p className="connection-note">使用专门的练习密码。注册后可在下方登录，当前暂不分配任务。</p>
+    <>
+      <p className="connection-note">创建账号后即可登录，管理属于自己的任务。</p>
       <form className="registration-form" onSubmit={register} noValidate>
         <label htmlFor="register-username">用户名</label>
         <input id="register-username" name="username" autoComplete="username" autoCapitalize="none"
@@ -82,17 +90,14 @@ export default function BackendRegistration() {
         <label htmlFor="register-confirmation">再次输入密码</label>
         <input id="register-confirmation" name="confirmation" type="password" autoComplete="new-password"
           value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} />
-        <button className="save-button" type="submit" disabled={busy}>{busy ? '正在注册…' : '注册练习账号'}</button>
+        <div className="auth-actions">
+          <button className="save-button" type="submit" disabled={busy}>{busy ? '正在注册…' : '注册账号'}</button>
+          <button className="cancel-button" type="button" disabled={busy} onClick={() => onCancel(username)}>返回登录</button>
+        </div>
       </form>
-      <p className={`connection-message is-${result.state}`} role={result.state === 'error' ? 'alert' : 'status'}>
+      {result.message && <p className={`connection-message is-${result.state}`} role={result.state === 'error' ? 'alert' : 'status'}>
         {result.message}
-      </p>
-      {result.user && <dl className="connection-details">
-        <dt>用户名</dt><dd>{result.user.username}</dd>
-        <dt>用户 ID</dt><dd>{result.user.id}</dd>
-        <dt>创建时间（UTC）</dt><dd><time dateTime={result.user.created_at}>{result.user.created_at}</time></dd>
-      </dl>}
-      <p className="connection-note">发送请求后会清空密码框；本页面不会把密码写入浏览器本地存储。</p>
-    </section>
+      </p>}
+    </>
   )
 }

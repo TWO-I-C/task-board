@@ -109,3 +109,31 @@ h2 { margin: 0; font-size: 18px; }
   .connection-details { grid-template-columns: 1fr; gap: 6px; }
   .connection-details dd + dt { margin-top: 6px; }
 }
+
+/* 账户版复用任务交互，将主流程与旧版数据入口分开。 */
+.account-board { width: min(760px, calc(100% - 40px)); margin-top: 56px; }
+.app-header { margin-bottom: 30px; }
+.account-session .eyebrow { margin-bottom: 4px; font-size: 12px; letter-spacing: .06em; }
+.account-session h2 { font-size: 23px; overflow-wrap: anywhere; }
+.account-session .login-form { max-width: 460px; }
+.auth-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.auth-actions button { min-width: 106px; }
+.recovery-actions { margin-top: 20px; }
+.account-count { margin-top: 10px; }
+.account-filters { padding: 18px 0 12px; margin-top: 8px; }
+.account-tasks .backend-task-list { margin-top: 0; }
+.account-tasks .empty-state { padding: 32px 12px; }
+.secondary-panel { margin-top: 24px; padding: 18px 22px; border: 1px solid #d9e0da; border-radius: 12px; }
+.secondary-panel > summary { cursor: pointer; color: #365f51; font-size: 14px; font-weight: 600; }
+.secondary-panel > summary:focus-visible { outline: 3px solid #648c78; outline-offset: 4px; }
+.secondary-panel[open] > summary { margin-bottom: 12px; }
+.legacy-board { margin-top: 28px; }
+.legacy-board > header .intro, .legacy-board > header .eyebrow { display: none; }
+.legacy-board > header h2 { font-size: 21px; }
+.learning-tools .backend-connection { margin-top: 12px; }
+@media (max-width: 520px) {
+  .account-board { margin-top: 28px; }
+  .account-session .connection-heading { flex-direction: row; align-items: center; }
+  .account-session h2 { font-size: 20px; }
+  .secondary-panel { padding: 16px; }
+}

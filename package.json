@@ -12,7 +12,10 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:permissions": "node tests/task-permissions.mjs",
-    "build:account": "vite build --mode account --outDir dist-account"
+    "build:account": "vite build --mode account --outDir dist-account",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report --host 127.0.0.1"
   },
   "dependencies": {
     "pg": "^8.23.1",
@@ -20,6 +23,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",

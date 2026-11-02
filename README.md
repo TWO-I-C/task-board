@@ -91,6 +91,31 @@ npm run test:permissions
 
 完整验收、阅读和复盘见 [第 13 课](docs/lessons/13-stage-two-integration.md)。本课无需新的数据库迁移。
 
+## 第三阶段：浏览器自动化验收
+
+[第 14 课：浏览器自动化验收](docs/lessons/14-browser-e2e.md)使用 Playwright，覆盖注册登录、同名任务删除、编辑筛选与刷新保留、账户隔离、跨标签页退出，以及响应丢失后的恢复。
+
+```bash
+# 新环境先安装依赖及测试浏览器；本机已经完成
+npm ci
+npx playwright install chromium
+
+# 运行五条浏览器测试
+npm run test:e2e
+
+# 看着浏览器执行单项测试
+npm run test:e2e:headed -- --grep "同名任务"
+
+# 查看最近一次 HTML 报告；查看后按 Control+C 停止报告服务
+npm run test:e2e:report
+```
+
+测试自行创建临时 PostgreSQL 集群，以随机端口启动独立前后端，结束后清理；不复用 localhost:5173 或学习用 task_board 数据库。需要 PostgreSQL 命令，默认使用 Postgres.app 的 latest/bin，可通过 POSTGRES_BIN 指定其他目录。每项测试使用新的浏览器环境和随机账号，不使用个人 Chrome 配置或真实密码。
+
+配置位于 `playwright.config.js`，用例位于 `tests/e2e/task-board.spec.js`。默认仅运行 Chromium、单 worker、零重试，失败保留截图及 trace。HTML 报告在 `playwright-report/`，失败产物在 `test-results/`，均被 Git 忽略；这些产物可能含虚构测试账号和测试会话，无需提交。下一次运行会更新报告。
+
+E2E 通过仅代表已覆盖的浏览器流程满足预期，不能替代 `npm run test:permissions` 对直接越权请求的检查。当前测试仍需手动运行命令，尚未接入 GitHub Actions。
+
 ## 构建与预览浏览器版
 
 ```bash

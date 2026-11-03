@@ -93,7 +93,7 @@ test('同名任务：取消不删除，确认只删除一条', async ({ page }) 
   await page.getByRole('button', { name: '确认删除', exact: true }).click()
   await expect(taskBoard(page).getByText('任务已删除。', { exact: true })).toBeVisible()
   // 失败实验：临时把下一行的 1 改成 2；观察失败后还原为 1。
-  await expect(matchingTasks).toHaveCount(1)
+  await expect(matchingTasks).toHaveCount(2)
   await expectCounts(page, 1, 0)
   await expect(matchingTasks).not.toBeChecked()
   expect(deleteRequests).toBe(1)

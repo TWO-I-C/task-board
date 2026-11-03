@@ -114,7 +114,19 @@ npm run test:e2e:report
 
 配置位于 `playwright.config.js`，用例位于 `tests/e2e/task-board.spec.js`。默认仅运行 Chromium、单 worker、零重试，失败保留截图及 trace。HTML 报告在 `playwright-report/`，失败产物在 `test-results/`，均被 Git 忽略；这些产物可能含虚构测试账号和测试会话，无需提交。下一次运行会更新报告。
 
-E2E 通过仅代表已覆盖的浏览器流程满足预期，不能替代 `npm run test:permissions` 对直接越权请求的检查。当前测试仍需手动运行命令，尚未接入 GitHub Actions。
+E2E 通过仅代表已覆盖的浏览器流程满足预期，不能替代 `npm run test:permissions` 对直接越权请求的检查。测试可以在本地手动运行，也已通过下面的 CI 工作流配置到 GitHub Actions；云端需在提交并推送后实际验收。
+
+## 第 15 课：持续集成
+
+[第 15 课讲义](docs/lessons/15-github-actions-ci.md)包含首次提交推送、查看运行和报告、故意失败与恢复的完整练习。
+
+工作流 `.github/workflows/ci.yml` 的名称为 **CI - Task board checks**，监听推送到 main 或 codex/** 分支，以及目标为 main 的 Pull Request。在 Ubuntu 24.04 上使用 Node.js 24、PostgreSQL 18 和 Playwright Chromium，顺序执行依赖安装、lint、两种前端构建、权限测试和浏览器测试。
+
+每次测试建立独立临时数据库，不需要本机 `.env`、学习数据库或真实账号。`POSTGRES_BIN` 指定 Linux 数据库命令目录。E2E 执行后且运行未取消时，HTML 报告作为 `playwright-report-运行编号-尝试编号` artifact 保留 7 天；测试失败不会因报告上传成功变成通过。
+
+首次推送学习分支后，到 [Actions](https://github.com/TWO-I-C/task-board/actions) 核对分支、提交编号、步骤日志及最终结论。本地 commit 不会触发云端运行。
+
+CI 工作流只负责检查，不部署账户服务，不自动设置合并所需检查。现有 Pages 工作流与 CI 独立，尚未把 CI 设置为发布前置条件。本课在学习分支完成红绿演练，不推送或合并 main。
 
 ## 构建与预览浏览器版
 

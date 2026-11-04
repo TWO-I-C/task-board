@@ -128,6 +128,14 @@ E2E 通过仅代表已覆盖的浏览器流程满足预期，不能替代 `npm r
 
 CI 工作流只负责检查，不部署账户服务，不自动设置合并所需检查。现有 Pages 工作流与 CI 独立，尚未把 CI 设置为发布前置条件。本课在学习分支完成红绿演练，不推送或合并 main。
 
+## 第 16 课：PR、代码审查与合并规则
+
+[第 16 课讲义](docs/lessons/16-pull-requests-review-rules.md)带你把 `codex/first-api` 提议合入 `main`：创建草稿 PR、按文件追踪权限和测试证据、配置 main 的保护规则，再观察错误断言如何阻止合并。
+
+[本次 PR 说明](docs/reviews/16-account-system-pr.md)和[保护规则配置](docs/lessons/16-main-protection.json)已准备好。配置文件保存的是预期设置；提交它不会自动修改 GitHub，实际生效情况要到仓库设置或通过 API 回读。
+
+本课规则要求通过 PR 合并、指定 GitHub Actions 检查通过、分支包含最新 main、审查讨论已解决，并对管理员生效；个人练习不要求另一位审查者批准。先完成“检查失败时被拦截 → 恢复后满足条件”，PR 保持打开。实际合并会触发现有 Pages 发布，后续结合发布条件再操作。
+
 ## 构建与预览浏览器版
 
 ```bash

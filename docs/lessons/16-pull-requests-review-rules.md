@@ -116,7 +116,7 @@ GitHub review 的 Comment 是反馈，Approve 是认可，Request changes 是要
 | required_conversation_resolution: true | 行内审查讨论需处理并解决；不等于自动修复代码 |
 | allow_force_pushes / allow_deletions: false | 不允许强推或删除受保护的 main |
 
-JSON 中 contexts 是兼容 API 的空列表，具体检查由 checks 指定。这里写的是 job 显示名称，不是 workflow 名称 CI - Task board checks，也不是报告上传步骤名称。
+本请求只用 checks 指定必需检查，不同时提交旧字段 contexts；即使 contexts 是空列表，同时提供两个字段也会触发 GitHub 的互斥字段校验，返回 HTTP 422。这里写的是 job 显示名称，不是 workflow 名称 CI - Task board checks，也不是报告上传步骤名称。
 
 个人练习的批准人数为 0，仍会要求 PR 和 CI。以后有协作者时再增加批准人数，不能把自己的检查记录当成另一人的批准。管理员受合并规则约束，但仓库所有者仍能修改规则；这不等于规则不可更改。
 

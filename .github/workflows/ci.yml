@@ -1,0 +1,101 @@
+name: CI - Task board checks
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 检查代码不需要发布网站或修改仓库的权限。
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # 学习分支只保留最新检查；main 的发布流程不因新推送而被中途取消。
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Lint, builds, API and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # 测试脚本自行建立临时数据库，不连接学习或生产数据库。
+      POSTGRES_BIN: /usr/lib/postgresql/18/bin
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check code
+        run: npm run lint
+      - name: Build browser edition
+        run: npm run build -- --base=/task-board/
+      - name: Build account edition
+        run: npm run build:account
+      - name: Install PostgreSQL 18 tools
+        # 使用 PostgreSQL 官方 Ubuntu 软件源；只在本次云端 runner 内安装。
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error --location \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' \
+            | sudo tee /etc/apt/sources.list.d/task-board-pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-18
+          "$POSTGRES_BIN/postgres" --version
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Test API permissions
+        run: npm run test:permissions
+      - name: Test browser journeys
+        id: e2e
+        run: npm run test:e2e
+      - name: Keep browser test report
+        # 测试失败后仍保留报告，不把失败改成成功；取消的运行无需再上传。
+        if: ${{ !cancelled() && (steps.e2e.outcome == 'success' || steps.e2e.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload checked browser edition
+        # 默认 success() 仍生效：前面任何检查失败，都不会上传发布产物。
+        if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: dist
+
+  deploy-pages:
+    name: Deploy checked browser edition
+    needs: check
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

@@ -1,0 +1,103 @@
+import { useEffect, useRef, useState } from 'react'
+
+export default function BackendRegistration({ onRegistered, onCancel }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [result, setResult] = useState({ state: 'idle', message: '' })
+  const submitting = useRef(false)
+  const lifetime = useRef(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
+  const busy = result.state === 'loading'
+
+  async function register(event) {
+    event.preventDefault()
+    if (submitting.current) return
+    const controller = lifetime.current
+    const normalizedUsername = username.trim().toLowerCase()
+    let validationError = ''
+    if (!/^[a-z][a-z0-9_]{2,31}$/.test(normalizedUsername)) {
+      validationError = '用户名需为 3–32 位小写字母、数字或下划线，并以字母开头。'
+    } else if (!password.isWellFormed() || password.includes('\u0000') || !password.trim()
+      || [...password].length < 15 || [...password].length > 128) {
+      validationError = '密码需为 15–128 个字符，不能全为空白或包含无效字符。'
+    } else if (password !== confirmation) {
+      validationError = '两次输入的密码不一致，请重新确认。'
+    }
+    if (validationError) {
+      setResult({ state: 'error', message: validationError })
+      return
+    }
+
+    submitting.current = true
+    setUsername(normalizedUsername)
+    setResult({ state: 'loading', message: '正在注册，请稍候…' })
+    let confirmed = false
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: normalizedUsername, password }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
+      })
+      if (response.status !== 201) {
+        if (response.status === 409) throw new Error('用户名已被使用（HTTP 409），没有覆盖已有账号。请换一个用户名。')
+        if (response.status === 400) throw new Error('注册信息未通过后端校验（HTTP 400），请检查用户名和密码。')
+        throw new Error('注册结果暂未确认。恢复连接后，请先尝试登录这个账号，再决定是否重新注册。')
+      }
+      confirmed = true
+      const data = await response.json()
+      if (controller.signal.aborted) return
+      if (!data?.user || typeof data.user.id !== 'string' || !data.user.id
+        || data.user.username !== normalizedUsername || typeof data.user.created_at !== 'string'
+        || Number.isNaN(Date.parse(data.user.created_at))) {
+        throw new Error('响应内容不完整。')
+      }
+      onRegistered(data.user.username)
+    } catch (error) {
+      if (controller.signal.aborted) return
+      let message = error.message
+      if (confirmed) message = '账号已创建，但响应未能完整显示。请返回登录，尝试使用这个账号登录。'
+      else if (error.name === 'TimeoutError' || error instanceof TypeError) {
+        message = '连接失败或超时，注册结果未确认。恢复后请先尝试登录这个账号，再决定是否重新注册。'
+      }
+      setResult({ state: 'error', message })
+    } finally {
+      setPassword('')
+      setConfirmation('')
+      submitting.current = false
+    }
+  }
+
+  return (
+    <>
+      <p className="connection-note">创建账号后即可登录，管理属于自己的任务。</p>
+      <form className="registration-form" onSubmit={register} noValidate>
+        <label htmlFor="register-username">用户名</label>
+        <input id="register-username" name="username" autoComplete="username" autoCapitalize="none"
+          spellCheck={false} value={username} disabled={busy} aria-describedby="register-username-help"
+          onChange={event => setUsername(event.target.value)} />
+        <p id="register-username-help" className="connection-note">3–32 位字母、数字或下划线，以字母开头；提交时去除首尾空白并转为小写。</p>
+        <label htmlFor="register-password">密码</label>
+        <input id="register-password" name="password" type="password" autoComplete="new-password"
+          value={password} disabled={busy} aria-describedby="register-password-help"
+          onChange={event => setPassword(event.target.value)} />
+        <p id="register-password-help" className="connection-note">15–128 个字符，可使用长口令；大小写和首尾空格都会保留。</p>
+        <label htmlFor="register-confirmation">再次输入密码</label>
+        <input id="register-confirmation" name="confirmation" type="password" autoComplete="new-password"
+          value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} />
+        <div className="auth-actions">
+          <button className="save-button" type="submit" disabled={busy}>{busy ? '正在注册…' : '注册账号'}</button>
+          <button className="cancel-button" type="button" disabled={busy} onClick={() => onCancel(username)}>返回登录</button>
+        </div>
+      </form>
+      {result.message && <p className={`connection-message is-${result.state}`} role={result.state === 'error' ? 'alert' : 'status'}>
+        {result.message}
+      </p>}
+    </>
+  )
+}

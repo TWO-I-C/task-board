@@ -126,7 +126,7 @@ E2E 通过仅代表已覆盖的浏览器流程满足预期，不能替代 `npm r
 
 首次推送学习分支后，到 [Actions](https://github.com/TWO-I-C/task-board/actions) 核对分支、提交编号、步骤日志及最终结论。本地 commit 不会触发云端运行。
 
-CI 工作流只负责检查，不部署账户服务，不自动设置合并所需检查。现有 Pages 工作流与 CI 独立，尚未把 CI 设置为发布前置条件。本课在学习分支完成红绿演练，不推送或合并 main。
+第 15 课在学习分支完成红绿演练。当时检查与 Pages 发布独立；第 16 课增加合并规则，第 17 课进一步把 Pages 发布接到检查之后。完整账户服务仍需另行部署。
 
 ## 第 16 课：PR、代码审查与合并规则
 
@@ -134,7 +134,15 @@ CI 工作流只负责检查，不部署账户服务，不自动设置合并所�
 
 [本次 PR 说明](docs/reviews/16-account-system-pr.md)和[保护规则配置](docs/lessons/16-main-protection.json)已准备好。配置文件保存的是预期设置；提交它不会自动修改 GitHub，实际生效情况要到仓库设置或通过 API 回读。
 
-本课规则要求通过 PR 合并、指定 GitHub Actions 检查通过、分支包含最新 main、审查讨论已解决，并对管理员生效；个人练习不要求另一位审查者批准。先完成“检查失败时被拦截 → 恢复后满足条件”，PR 保持打开。实际合并会触发现有 Pages 发布，后续结合发布条件再操作。
+本课规则要求通过 PR 合并、指定 GitHub Actions 检查通过、分支包含最新 main、审查讨论已解决，并对管理员生效；个人练习不要求另一位审查者批准。完成“检查失败时被拦截 → 恢复后满足条件”后，按第 17 课连接发布流程并进行实际合并。
+
+## 第 17 课：检查通过后发布
+
+[第 17 课讲义](docs/lessons/17-checked-pages-release.md)把合并前检查与合并后发布连起来。`.github/workflows/ci.yml` 保留原有必需检查名称，新增 `deploy-pages` 任务并设置 `needs: check`，删除原来独立运行的 deploy.yml。
+
+PR 和学习分支执行检查，发布任务显示 Skipped。只有 main 的 push 或手动运行，才会在检查成功后上传当前运行生成的 `dist`，并由 `Deploy checked browser edition` 发布。账户版 `dist-account` 不作为 Pages 产物上传。
+
+检查任务只有代码读取权限；发布任务才有 Pages 与 OIDC 权限。PR/学习分支可取消过时检查，main 的流程不会因新推送而中途取消正在运行的发布，发布任务另用 github-pages 并发组避免同时发布。
 
 ## 构建与预览浏览器版
 
@@ -151,17 +159,19 @@ npm run preview -- --base=/task-board/
 npm run build:account
 ```
 
-产物在 `dist-account`，用于后续完整系统部署。它需要运行中的 Node.js API、PostgreSQL，以及同源 `/api` 路由和正确的会话配置；不能只发布静态文件就完成账户服务部署。两个产物目录均被 Git 忽略。默认 `npm run build` 仍生成浏览器版，因此现有 Pages 工作流不改变。
+产物在 `dist-account`，用于后续完整系统部署。它需要运行中的 Node.js API、PostgreSQL，以及同源 `/api` 路由和正确的会话配置；不能只发布静态文件就完成账户服务部署。两个产物目录均被 Git 忽略。默认 `npm run build` 仍生成浏览器版，Pages 发布的也是这个版本。
 
 ## 自动部署到 GitHub Pages
 
 仓库的 Settings → Pages → Source 使用 **GitHub Actions**。
 
-工作流位于 `.github/workflows/deploy.yml`。每次推送到 `main`，它依次执行：安装依赖 → 构建网站 → 上传 `dist` → 发布到 GitHub Pages。也可以在 Actions 页面手动运行。
+工作流位于 `.github/workflows/ci.yml`，显示名称仍为 **CI - Task board checks**。合入 main 后，先运行 lint、两种构建、权限测试和浏览器测试；成功后上传 `dist` 为 `github-pages` artifact，发布任务依赖该检查任务并使用同一次运行的产物，不重新构建或另取最新分支代码。检查失败时发布任务跳过，发布本身失败时也不能认定已经上线。
+
+也可以在这个工作流页面选择 **Run workflow → main**，从检查开始创建一次新运行。旧 Deploy 工作流的历史记录可能仍可见；后续发布使用 ci.yml 入口。手动选择其他分支只检查，不发布。
 
 因为网站部署在 `/task-board/` 路径下，构建时需要指定 `--base=/task-board/`，让页面从正确的位置加载 JavaScript 和 CSS。本地开发配置不变。
 
-可以在 [Actions 页面](https://github.com/TWO-I-C/task-board/actions) 查看发布结果。只有流程成功完成，才能确认该版本已经发布；`git commit` 只在本地保存版本，`git push` 才会触发这里的自动部署。
+在 [Actions 页面](https://github.com/TWO-I-C/task-board/actions) 核对 main 的提交编号、检查任务与发布任务结果，再打开线上地址验收。PR 的绿色不等于已经发布；本地 commit 只是保存，推送学习分支更新 PR，通过规则并合入 main 后才触发这里的自动发布。
 
 ## 上线后验收
 

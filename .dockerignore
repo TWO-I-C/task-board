@@ -1,0 +1,10 @@
+**
+!package.json
+!package-lock.json
+!server/
+server/**
+!server/*.js
+!server/*.sql
+!server/migrations/
+server/migrations/**
+!server/migrations/*.sql

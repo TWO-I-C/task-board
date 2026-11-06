@@ -4,7 +4,7 @@ import { createSession, deleteTask, findSession, insertTask, insertUser, listTas
 import { hashPassword, verifyPassword } from './passwords.js'
 import { checkLoginRate, newSessionToken, requestSessionHash, requireTrustedMutation, sessionCookie, sessionHash } from './sessions.js'
 
-const host = '127.0.0.1'
+const host = process.env.API_HOST || '127.0.0.1'
 const port = Number(process.env.PORT ?? 3001)
 
 function sendJson(response, statusCode, data) {

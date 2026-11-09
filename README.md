@@ -156,6 +156,10 @@ PR 和学习分支执行检查，发布任务显示 Skipped。只有 main 的 pu
 
 Compose 增加 `web` 服务，用 Nginx 提供账户版构建产物，并把同一地址下的 `/api/` 请求转到后端。本机入口为 `http://127.0.0.1:8080`。沿用第 19 课的项目名与数据库卷，按[第 20 课讲义](docs/lessons/20-container-web.md)验证登录、任务保存和后端停启。
 
+## 第 21 课 · 备份数据库并实际恢复
+
+将 PostgreSQL 导出为备份文件，在新建的 Compose 项目中恢复，再核对任务 ID、完成状态和备份时点。文件保存在 Mac 的 `~/Documents/Codex/learning-backups/task-board` 下。按[第 21 课讲义](docs/lessons/21-database-backup-restore.md)完成五项验收。
+
 ## 构建与预览浏览器版
 
 ```bash

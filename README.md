@@ -152,6 +152,10 @@ PR 和学习分支执行检查，发布任务显示 Skipped。只有 main 的 pu
 
 在本机用 Compose 启动 API 和 PostgreSQL 18，通过账户页面新增一条任务，对照 SQL 查询，再重建容器核对同一条任务的 ID。端口、命令和五项验收见[第 19 课讲义](docs/lessons/19-compose-postgres.md)。
 
+## 第 20 课 · 容器提供账户页面与 API 转发
+
+Compose 增加 `web` 服务，用 Nginx 提供账户版构建产物，并把同一地址下的 `/api/` 请求转到后端。本机入口为 `http://127.0.0.1:8080`。沿用第 19 课的项目名与数据库卷，按[第 20 课讲义](docs/lessons/20-container-web.md)验证登录、任务保存和后端停启。
+
 ## 构建与预览浏览器版
 
 ```bash

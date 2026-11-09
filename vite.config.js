@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:3001',
+      '/api': process.env.TASK_BOARD_DEV_API || 'http://127.0.0.1:3001',
     },
   },
 })

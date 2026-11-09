@@ -148,6 +148,10 @@ PR 和学习分支执行检查，发布任务显示 Skipped。只有 main 的 pu
 
 从项目根目录构建后端镜像，在本机通过 `127.0.0.1:3101` 访问健康检查，再停启同一个容器验证请求来自哪里。安装指引、命令和五项验收见[第 18 课讲义](docs/lessons/18-docker-backend.md)。
 
+## 第 19 课 · 用 Compose 连接后端与 PostgreSQL
+
+在本机用 Compose 启动 API 和 PostgreSQL 18，通过账户页面新增一条任务，对照 SQL 查询，再重建容器核对同一条任务的 ID。端口、命令和五项验收见[第 19 课讲义](docs/lessons/19-compose-postgres.md)。
+
 ## 构建与预览浏览器版
 
 ```bash

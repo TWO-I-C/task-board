@@ -1,0 +1,43 @@
+name: task-board-lesson19
+
+services:
+  db:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: task_board_practice
+      POSTGRES_PASSWORD: ${COMPOSE_DB_ADMIN_PASSWORD:?Run node scripts/init-compose-env.mjs first}
+      TASK_BOARD_APP_PASSWORD: ${COMPOSE_DB_APP_PASSWORD:?Run node scripts/init-compose-env.mjs first}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./docker/create-app-role.sql:/docker-entrypoint-initdb.d/10-app-role.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "task_board_practice"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: task_board_practice
+      PGUSER: task_board_app
+      PGPASSWORD: ${COMPOSE_DB_APP_PASSWORD:?Run node scripts/init-compose-env.mjs first}
+      APP_ORIGINS: http://127.0.0.1:5190
+    command: ["sh", "-ec", "node server/init-db.js && node server/migrate-db.js && exec node server/index.js"]
+    ports:
+      - "127.0.0.1:3102:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  pgdata:

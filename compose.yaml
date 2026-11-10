@@ -28,10 +28,10 @@ services:
       PGDATABASE: task_board_practice
       PGUSER: task_board_app
       PGPASSWORD: ${COMPOSE_DB_APP_PASSWORD:?Run node scripts/init-compose-env.mjs first}
-      APP_ORIGINS: http://127.0.0.1:5190,http://127.0.0.1:8080
+      APP_ORIGINS: http://127.0.0.1:5190,http://127.0.0.1:${TASK_BOARD_WEB_PORT:-8080}
     command: ["sh", "-ec", "node server/init-db.js && node server/migrate-db.js && exec node server/index.js"]
     ports:
-      - "127.0.0.1:3102:3001"
+      - "127.0.0.1:${TASK_BOARD_API_PORT:-3102}:3001"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 3s
@@ -47,7 +47,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${TASK_BOARD_WEB_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 3s

@@ -160,6 +160,10 @@ Compose 增加 `web` 服务，用 Nginx 提供账户版构建产物，并把同�
 
 将 PostgreSQL 导出为备份文件，在新建的 Compose 项目中恢复，再核对任务 ID、完成状态和备份时点。文件保存在 Mac 的 `~/Documents/Codex/learning-backups/task-board` 下。按[第 21 课讲义](docs/lessons/21-database-backup-restore.md)完成五项验收。
 
+## 第 22 课 · 在 CI 中验收完整容器系统
+
+`npm run test:containers` 创建独立的 Compose 项目，构建三个容器，通过浏览器验证账户流程与任务持久化，结束后清理本次测试资源。GitHub Actions 的 `Test container system` 步骤运行同一条命令。按[第 22 课讲义](docs/lessons/22-container-ci.md)完成本地失败演练、修复与云端核对。
+
 ## 构建与预览浏览器版
 
 ```bash

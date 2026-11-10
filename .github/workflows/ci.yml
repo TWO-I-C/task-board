@@ -70,6 +70,9 @@ jobs:
           path: playwright-report/
           if-no-files-found: warn
           retention-days: 7
+      - name: Test container system
+        timeout-minutes: 10
+        run: npm run test:containers
       - name: Upload checked browser edition
         # 默认 success() 仍生效：前面任何检查失败，都不会上传发布产物。
         if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}

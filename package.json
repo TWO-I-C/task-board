@@ -12,6 +12,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:permissions": "node tests/task-permissions.mjs",
+    "test:containers": "node tests/container-system.mjs",
     "build:account": "vite build --mode account --outDir dist-account",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
